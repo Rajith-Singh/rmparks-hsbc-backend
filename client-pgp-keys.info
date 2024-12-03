@@ -1,0 +1,19 @@
+External API Clients are required to sign their payload with the provided Client private key and encrypt with the provided HSBC public key before invoking the API end-point. Similarly for an API response the Client application is required to decrypt the response with the Client private key and verify the response payload with the provided HSBC public key.
+
+ 
+
+Steps to prepare the request payload.
+
+·         Step 1: Prepare the payload format based on the documentation detailed on the Developer Portal
+
+·         Step 2: Encrypt the payload using the provided HSBC public key and sign with the provided Client private key.
+
+·         Step 3: Encode the encrypted payload in BASE64 encoding representation.
+
+·         Step 4: Populate the encoded payload in the JSON field identified in the Developer Portal documentation for the specified end-point
+
+Please see the Sandbox documentation on the Developer Portal for further instructions and sample code.
+
+The default passphrase for the keys is 1password. 
+
+If further help is required, please raise a Support query via the Developer Portal.
