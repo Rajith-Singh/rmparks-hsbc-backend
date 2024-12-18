@@ -6,7 +6,11 @@ const openpgp = require('openpgp');
 const sql = require('mssql');
 const moment = require('moment');
 const cors = require('cors');
+const path = require('path');
 const { format, parseISO, addDays } = require('date-fns');
+const winston = require('winston');
+const DailyRotateFile = require('winston-daily-rotate-file');
+
 
 dotenv.config();
 
@@ -26,11 +30,40 @@ const dbConfig = {
     },
 };
 
+let isTodayHoliday = false;  // Flag to store holiday status
+
+const holidayCache = {};  // Store cached holiday info (by date)
+const nextWorkingDateCache = {};  // Cache next working date (by date)
+
+// Set up Winston logger with daily rotation
+const transport = new DailyRotateFile({
+    filename: path.join(__dirname, 'logs', '%DATE%-app.log'),
+    datePattern: 'YYYY-MM-DD',
+    maxSize: '20m',
+    maxFiles: '14d'
+});
+
+// Create a logger instance
+const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.printf(({ timestamp, level, message }) => `[${timestamp}] ${level}: ${message}`)
+    ),
+    transports: [
+        transport,
+        new winston.transports.File({ filename: path.join(__dirname, 'logs', 'error.log'), level: 'error' }),
+        new winston.transports.Console({ format: winston.format.simple() })
+    ],
+});
+
+
 // Store transactions depending on system holiday status
 async function storeTransactions(response) {
     // Ensure the response contains a valid array of transactions
     if (!Array.isArray(response) || response.length === 0) {
         console.error("No transactions to process.");
+        logger.warn("No transactions to process.");
         return;
     }
 
@@ -50,49 +83,131 @@ async function storeTransactions(response) {
         const amount = transactionData.transactionAmount.amount;  // Transaction amount
         const dipstrName = null;  // Set to null as required
 
-        // Check if the bankDate is a system holiday
-        const systemHoliday = await isSystemHoliday(bankDate);
-
-        if (systemHoliday) {
-            // If it's a system holiday, get the next system working date
-            const nextSystemWorkingDate = await getNextSystemWorkingDate(moment(bankDate));
+        // If today is a system holiday, get the next system working date
+        const systemHoliday = isTodayHoliday;
+        
+        try {
+            // Check if the transaction reference already exists in the database
+            const existingTransaction = await checkTransactionExists(bankTransRef);
             
-            // Insert into Transactions_NonBusinessDates table with the next system working date
-            await insertTransactionNonBusinessDate({
-                transCode,
-                collectionAcc,
-                bankCode,
-                branchCode,
-                custAcc,
-                payCca,
-                cOrD,
-                bankTransRef,
-                bankDate,
-                amount,
-                dipstrName,
-                nextSystemWorkingDate,
-                reasonForNonBusinessDate: 'System Holiday'
-            });
-        } else {
-            // If it's a system working date, insert into Transactions_TMP table with the bankDate
-            await insertTransaction({
-                transCode,
-                collectionAcc,
-                bankCode,
-                branchCode,
-                custAcc,
-                payCca,
-                cOrD,
-                bankTransRef,
-                bankDate,
-                amount,
-                dipstrName
-            });
+            if (existingTransaction) {
+                // Log the duplicate reference and skip inserting the transaction
+                logger.warn(`Transaction with reference ${bankTransRef} already exists. Skipping insertion.`);
+                continue; // Skip to the next transaction
+            }
+
+            const systemHoliday = isTodayHoliday;
+            
+            if (systemHoliday) {
+                logger.info(`Today is a system holiday. Storing transaction for non-business date.`);
+                const nextSystemWorkingDate = await getNextSystemWorkingDate(moment(bankDate));
+
+                // Log the transaction insertion for non-business date
+                await insertTransactionNonBusinessDate({
+                    transCode,
+                    collectionAcc,
+                    bankCode,
+                    branchCode,
+                    custAcc,
+                    payCca,
+                    cOrD,
+                    bankTransRef,
+                    bankDate,
+                    amount,
+                    dipstrName,
+                    nextSystemWorkingDate,
+                    reasonForNonBusinessDate: 'System Holiday'
+                });
+
+                logger.info(`Transaction for ${bankTransRef} stored for non-business date with next working date: ${nextSystemWorkingDate}`);
+            } else {
+                logger.info(`Today is a working day. Storing transaction for business date.`);
+                await insertTransaction({
+                    transCode,
+                    collectionAcc,
+                    bankCode,
+                    branchCode,
+                    custAcc,
+                    payCca,
+                    cOrD,
+                    bankTransRef,
+                    bankDate,
+                    amount,
+                    dipstrName
+                });
+
+                logger.info(`Transaction for ${bankTransRef} stored successfully.`);
+            }
+        } catch (error) {
+            // Check if the error is a duplicate key violation
+            if (error.originalError && error.originalError.message.includes("Violation of UNIQUE KEY constraint")) {
+                logger.error(`Duplicate transaction reference found: ${bankTransRef}. Skipping insertion.`);
+            } else {
+                // Handle other errors
+                logger.error(`Error storing transaction for ${transactionData.transactionReference}: ${error.message}`);
+            }
         }
     }
 }
 
+// Function to check if a transaction reference exists in the database
+async function checkTransactionExists(transactionReference) {
+    try {
+        // Assuming you're using mssql to query the database
+        const pool = await sql.connect(config);  // Ensure you have your SQL config
+        const result = await pool.request()
+            .input('transactionReference', sql.NVarChar, transactionReference)  // Assuming the type of the reference is NVarChar
+            .query('SELECT COUNT(*) AS count FROM Transactions_TMP WHERE transactionReference = @transactionReference');
+        
+        if (result.recordset[0].count > 0) {
+            return true;  // Transaction already exists
+        }
+        return false;  // Transaction does not exist
+    } catch (error) {
+        logger.error(`Error checking if transaction reference ${transactionReference} exists: ${error.message}`);
+        return false;  // In case of error, assume the transaction does not exist
+    }
+}
 
+
+// Initial holiday check on server startup
+async function initialHolidayCheck() {
+    try {
+        const today = moment().format('YYYY-MM-DD');
+        isTodayHoliday = await isSystemHoliday(today);  // Check if today is a holiday
+        console.log(isTodayHoliday ? `Today is a system holiday: ${today}` : `Today is a working day: ${today}`);
+        
+        // Start handling transactions after the holiday check
+        startTransactionHandling();
+    } catch (error) {
+        console.error('Error during initial holiday check:', error);
+    }
+}
+
+// Function to fetch transactions for the current date
+async function fetchTransactionsForToday() {
+    try {
+        const today = moment().format('YYYY-MM-DD');  // Get today's date in 'YYYY-MM-DD' format
+        const apiUrl = `http://localhost:3020/get-all-transactions?date=${today}`;
+
+        // Call the API
+        const response = await axios.get(apiUrl);
+
+        console.log('Transactions fetched successfully:', response.data);
+    } catch (error) {
+        console.error('Error fetching transactions for today:', error);
+    }
+}
+
+
+// Start the periodic transaction handling
+async function startTransactionHandling() {
+    // Call fetchTransactionsForToday immediately to start handling transactions
+    fetchTransactionsForToday();
+
+    // Set interval to call fetchTransactionsForToday every 5 minutes (300,000 milliseconds)
+    setInterval(fetchTransactionsForToday, 5 * 60 * 1000);
+}
 
 // Load PGP keys from specified file paths
 async function loadPGPKey(filePath) {
@@ -141,6 +256,7 @@ async function decryptWithPython(encryptedData) {
 
 // Fetch transactions from HSBC with signing and encryption
 async function fetchTransactions(transactionDate) {
+    logger.info(`Started fetching transactions for ${transactionDate}`);
     const clientPrivateKey = await loadPGPKey('client-private.pem');
     const hsbcPublicKey = await loadPGPKey('hsbc-public.pem');
     const passphrase = '1password';
@@ -152,6 +268,9 @@ async function fetchTransactions(transactionDate) {
     });
 
     const encryptedRequestData = await signAndEncryptData(requestData, clientPrivateKey, hsbcPublicKey, passphrase);
+    logger.info(`Successfully encrypted request data for ${transactionDate}`);
+
+    
     const response = await axios.post(
         `${process.env.BANK_API_URL}/transactions`,
         { transactionsRequestBase64: encryptedRequestData },
@@ -167,9 +286,13 @@ async function fetchTransactions(transactionDate) {
         }
     );
 
+    // Log response details
+    logger.info(`Received response from HSBC for ${transactionDate}`);
+
     // Decrypt and log the response to check its structure
     const transactions = await decryptWithPython(response.data.reportBase64);
     console.log('Decrypted Transactions:', transactions); // Log the structure
+    logger.info(`Decrypted transactions successfully for ${transactionDate}`);
 
     // Ensure we're accessing the correct array (transactions.transaction)
     const transactionData = transactions.transactions.transaction || []; // Fallback to empty array if no transactions
@@ -243,6 +366,7 @@ async function insertTransactionNonBusinessDate(transaction) {
 
 // Function to check if the date is a system holiday
 async function isSystemHoliday(date) {
+    logger.info(`Checking if ${date} is a system holiday...`);
     // Ensure that `date` is a moment object
     if (!moment.isMoment(date)) {
         date = moment(date);  // Convert to moment if it's not already
@@ -261,8 +385,13 @@ async function isSystemHoliday(date) {
     const maldivesWorking = isBankWorking(date, maldivesHolidays, maldivesWeekend);
     const sriLankaWorking = isBankWorking(date, sriLankaHolidays, sriLankaWeekend);
 
+    // Log whether either bank is working
+    logger.info(`Maldives bank working: ${maldivesWorking}`);
+    logger.info(`Sri Lanka bank working: ${sriLankaWorking}`);
+
     // System holiday if both banks are not working
     return !(maldivesWorking || sriLankaWorking);
+    logger.info(`Date ${date} is ${holidayStatus ? 'a system holiday' : 'a working day'}`);
 }
 
 
@@ -278,14 +407,22 @@ function isBankWorking(date, holidays, weekendDays) {
 
 // Function to get the next system working date
 async function getNextSystemWorkingDate(date) {
+    logger.info(`Fetching the next system working date from ${date}`);
     let nextWorkingDate = moment(date).add(1, 'days'); // Start with the next day
 
-    // Iterate until a system working date is found
-    while (await isSystemHoliday(nextWorkingDate)) {
-        nextWorkingDate = nextWorkingDate.add(1, 'days');
-    }
+    try {
+        // Iterate until a system working date is found
+        while (await isSystemHoliday(nextWorkingDate)) {
+            logger.info(`Skipping ${nextWorkingDate.format('YYYY-MM-DD')}: It's a system holiday`);
+            nextWorkingDate = nextWorkingDate.add(1, 'days');
+        }
 
-    return nextWorkingDate.format('YYYY-MM-DD');
+        logger.info(`Next system working date is: ${nextWorkingDate.format('YYYY-MM-DD')}`);
+        return nextWorkingDate.format('YYYY-MM-DD');
+    } catch (error) {
+        logger.error(`Error fetching next system working date from ${date}: ${error.message}`);
+        throw error;
+    }
 }
 
 
@@ -299,6 +436,9 @@ async function getHolidayList(countryCode, date) {
         const url = `https://calendarific.com/api/v2/holidays?&api_key=${process.env.CALENDARIFIC_API_KEY}&country=${countryCode}&year=${year}&month=${month}&day=${day}`;
         const response = await axios.get(url);
 
+        // Log the holidays data retrieved
+        logger.info(`Received holidays data for ${countryCode}:`, response.data);
+
         // Extract and return holiday dates as an array
         return response.data.response.holidays.map(holiday => holiday.date.iso);
     } catch (error) {
@@ -307,26 +447,6 @@ async function getHolidayList(countryCode, date) {
     }
 }
 
-
-// // Get holiday data from the Calendarific API
-// async function getHoliday(countryCode, date) {
-//     const url = `https://calendarific.com/api/v2/holidays?&api_key=${process.env.CALENDARIFIC_API_KEY}&country=${countryCode}&year=${date.year()}&month=${date.month() + 1}&day=${date.date()}`;
-//     const response = await axios.get(url);
-//     return response.data.response.holidays.length > 0;
-// }
-
-// // Function to get the next system working date
-// async function getNextSystemWorkingDate(date) {
-//     let nextWorkingDate = date.add(1, 'days');
-    
-//     while (await isSystemHoliday(nextWorkingDate)) {
-//         nextWorkingDate = nextWorkingDate.add(1, 'days');
-//     }
-    
-//     return nextWorkingDate.format('YYYY-MM-DD');
-// }
-
-// Enable CORS with default settings
 app.use(cors());
 
 //Fetch transaction information from the tra table
@@ -437,4 +557,7 @@ app.get('/get-all-transactions', async (req, res) => {
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
     console.log(`Access the transaction fetch API with a date filter at: http://localhost:${port}/get-all-transactions?date=YYYY-MM-DD`);
+
+    // Perform initial holiday check after the server starts
+    initialHolidayCheck();
 });
