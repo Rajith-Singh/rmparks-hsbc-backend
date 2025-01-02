@@ -113,13 +113,61 @@ async function storeTransactions(transactionData) {
         const collectionAcc = 'hsbc';
         const bankCode = 'HSBC';
         const branchCode = '7092001';
-        const custAcc = transactionDataItems.transactionInformation.split('/')[2].slice(0, 6);  // Extract first 6 digits
+        //const custAcc = transactionDataItems.transactionInformation.split('/')[2].slice(0, 6);  // Extract first 6 digits
         const payCca = 'R001';
         const cOrD = transactionDataItems.creditDebitIndicator;
         const bankTransRef = transactionDataItems.transactionReference;
         const bankDate = transactionDataItems.valueDateTime;
         const amount = transactionDataItems.transactionAmount.amount;
         const dipstrName = null;
+
+        // Extract account number from transactionInformation
+        const transactionInformation = transactionDataItems.transactionInformation;
+        const custAccMatch = transactionInformation.match(/\/VA\/(\d{10})\//);
+
+        let custAcc, errorDescCode;
+
+        if (custAccMatch && custAccMatch[1]) {
+            custAcc = custAccMatch[1].slice(0, 6); // First 6 digits
+
+            // Check if the customer number exists
+            const customerExists = await checkCustomerNumberExists(custAcc);
+
+            if (!customerExists) {
+                errorDescCode = 'CUSER';
+                await insertTransactionError({
+                    transCode,
+                    errorDescCode,
+                    bankCode,
+                    branchCode,
+                    custAcc,
+                    cOrD,
+                    bankTransRef,
+                    bankDate,
+                    amount,
+                });
+                logger.error(`Customer number does not exist. Inserted into TBL_TRANSACTION_ERROR with code ${errorDescCode}`);
+                continue;
+            }
+        } else {
+            errorDescCode = 'CUSLN';
+            await insertTransactionError({
+                transCode,
+                errorDescCode,
+                bankCode,
+                branchCode,
+                custAcc: null,
+                cOrD,
+                bankTransRef,
+                bankDate,
+                amount,
+            });
+            logger.error(`Invalid account number length. Inserted into TBL_TRANSACTION_ERROR with code ${errorDescCode}`);
+            continue;
+        }
+
+
+        
 
         // Check if it's a system holiday in either LK or MV
         const systemHoliday = await isSystemHoliday(bankDate);
@@ -167,6 +215,46 @@ async function storeTransactions(transactionData) {
 
 
 
+async function checkCustomerNumberExists(customerNumber) {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('CUSTOMER_NO', sql.NVarChar, customerNumber)
+            .query('SELECT COUNT(*) AS count FROM TBL_MAS_CUSTOMER WHERE CUSTOMER_NO = @CUSTOMER_NO');
+        return result.recordset[0].count > 0;
+    } catch (error) {
+        console.error('Error checking customer number existence:', error);
+        return false;
+    }
+}
+
+
+async function insertTransactionError(transactionError) {
+    try {
+        const pool = await sql.connect(dbConfig);
+        await pool.request()
+            .input('SYS_REF', sql.NVarChar, transactionError.transCode)
+            .input('ERROR_DES_CODE', sql.NVarChar, transactionError.errorDescCode)
+            .input('BANK_CODE', sql.NVarChar, transactionError.bankCode)
+            .input('BRANCH_CODE', sql.NVarChar, transactionError.branchCode)
+            .input('CUST_AC', sql.NVarChar, transactionError.custAcc)
+            .input('C_OR_D', sql.NVarChar, transactionError.cOrD)
+            .input('BANK_TRANS_REF', sql.NVarChar, transactionError.bankTransRef)
+            .input('BANK_DATE', sql.DateTime, transactionError.bankDate)
+            .input('AMOUNT', sql.Decimal(18, 2), transactionError.amount)
+            .input('ERROR_DESC_CODE', sql.NVarChar, transactionError.errorDescCode)
+            .input('ENTERED_BY', sql.NVarChar, 'WBSER') // Hardcoded value
+            .input('ENTERED_DATE', sql.DateTime, new Date()) // Current timestamp
+            .input('STATUS', sql.NVarChar, 'OPN') // Hardcoded value
+            .input('BANK_AUTH', sql.NVarChar, '80885630') // Hardcoded value for BANK_AUTH
+            .input('DIPSTR_NAME', sql.NVarChar, null) // NULL value for SIPSTR_NAME
+            .query(`INSERT INTO TBL_TRANSACTION_ERROR 
+                (SYS_REF, ERROR_DESC_CODE, BANK_AUTH, BANK_CODE, BRANCH_CODE, CUST_AC, C_OR_D, BANK_TRANS_REF, BANK_DATE, AMOUNT, DIPSTR_NAME, ENTERED_BY, ENTERED_DATE, STATUS) 
+                VALUES (@TRANS_CODE, @COLLECTION_AC, @BANK_CODE, @BRANCH_CODE, @CUST_AC, @C_OR_D, @BANK_TRANS_REF, @BANK_DATE, @AMOUNT, @DIPSTR_NAME, @ENTERED_BY, @ENTERED_DATE, @STATUS)`);
+    } catch (error) {
+        console.error('Error inserting transaction into TBL_TRANSACTION_ERROR:', error);
+    }
+}
 
 
 
@@ -222,7 +310,6 @@ async function decryptWithPython(encryptedData) {
 }
 
 
-// Fetch transactions from HSBC with signing and encryption
 // Fetch transactions from HSBC with signing and encryption
 async function fetchTransactions(transactionDate) {
     const clientPrivateKey = await loadPGPKey('client-private.pem');

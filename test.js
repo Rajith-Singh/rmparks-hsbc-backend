@@ -101,7 +101,6 @@ function isHoliday(date, countryCode) {
 
 // Store transactions depending on system holiday status
 async function storeTransactions(transactionData) {
-    // Ensure the response contains a valid array of transactions
     if (!Array.isArray(transactionData) || transactionData.length === 0) {
         console.error("No transactions to process.");
         return;
@@ -110,22 +109,20 @@ async function storeTransactions(transactionData) {
     for (const transaction of transactionData) {
         const transactionDataItems = transaction.items;  // Transaction details are in 'items'
 
-        // Extract the relevant fields from the transactionData
-        const transCode = generateTransCode();  // Assuming you have a function that generates the trans code
+        const transCode = generateTransCode();
         const collectionAcc = 'hsbc';
         const bankCode = 'HSBC';
         const branchCode = '7092001';
-        const custAcc = transactionDataItems.transactionInformation.split('/')[2].slice(0, 6);  // Extract first 6 digits from transactionInformation
+        const custAcc = transactionDataItems.transactionInformation.split('/')[2].slice(0, 6);  // Extract first 6 digits
         const payCca = 'R001';
-        const cOrD = transactionDataItems.creditDebitIndicator;  // 'C' or 'D'
+        const cOrD = transactionDataItems.creditDebitIndicator;
         const bankTransRef = transactionDataItems.transactionReference;
-        const bankDate = transactionDataItems.valueDateTime;  // Date in YYYY-MM-DD format
-        const amount = transactionDataItems.transactionAmount.amount;  // Transaction amount
-        const dipstrName = null;  // Set to null as required
+        const bankDate = transactionDataItems.valueDateTime;
+        const amount = transactionDataItems.transactionAmount.amount;
+        const dipstrName = null;
 
-        // Check if the bankDate is a system holiday
+        // Check if it's a system holiday in either LK or MV
         const systemHoliday = await isSystemHoliday(bankDate);
-        logger.info(`Processing transaction ${transCode} for ${bankDate}`);
 
         if (systemHoliday) {
             // If it's a system holiday, get the next system working date
@@ -149,7 +146,7 @@ async function storeTransactions(transactionData) {
             });
             logger.info(`Inserted transaction into Transactions_NonBusinessDates for ${transCode}`);
         } else {
-            // If it's a system working date, insert into Transactions_TMP table with the bankDate
+            // Insert into Transactions_TMP table with the bankDate
             await insertTransaction({
                 transCode,
                 collectionAcc,
@@ -167,6 +164,7 @@ async function storeTransactions(transactionData) {
         }
     }
 }
+
 
 
 
@@ -329,29 +327,33 @@ async function insertTransactionNonBusinessDate(transaction) {
 }
 
 
-// Check if the date is a system holiday by calling the Calendarific API
+// Check if today is a holiday for both Sri Lanka (LK) and Maldives (MV)
 async function isSystemHoliday(date) {
-    if (!moment.isMoment(date)) {
-        date = moment(date).tz('Asia/Colombo');
+    // Ensure date is a moment object
+    const momentDate = moment(date);  // Convert to moment if not already
+
+    const sriLankaDate = momentDate.tz('Asia/Colombo').format('YYYY-MM-DD');
+    const maldivesDate = momentDate.tz('Indian/Maldives').format('YYYY-MM-DD');
+
+    const isSriLankaHoliday = cachedHolidays['LK'].includes(sriLankaDate);
+    const isMaldivesHoliday = cachedHolidays['MV'].includes(maldivesDate);
+
+    // Log the holiday status for Sri Lanka and Maldives
+    logger.info(`Holiday check for ${momentDate.format('YYYY-MM-DD')}: Sri Lanka holiday = ${isSriLankaHoliday}, Maldives holiday = ${isMaldivesHoliday}`);
+
+    // Determine and log whether it is a system holiday
+    if (isSriLankaHoliday || isMaldivesHoliday) {
+        logger.info(`System holiday on ${momentDate.format('YYYY-MM-DD')} due to ${isSriLankaHoliday ? 'Sri Lanka' : 'Maldives'} holiday.`);
+        return true;
+    } else {
+        logger.info(`No system holiday on ${momentDate.format('YYYY-MM-DD')}`);
+        return false;
     }
-
-    const sriLankaDate = date.format('YYYY-MM-DD');
-    const maldivesDate = date.format('YYYY-MM-DD');
-
-    // Check if the holiday list for Sri Lanka and Maldives is already cached
-    if (!cachedHolidays['LK'][sriLankaDate]) {
-        cachedHolidays['LK'][sriLankaDate] = await getHolidayList('LK', date);
-    }
-    if (!cachedHolidays['MV'][maldivesDate]) {
-        cachedHolidays['MV'][maldivesDate] = await getHolidayList('MV', date);
-    }
-
-    // Check if the date is a working day in Sri Lanka or Maldives
-    const maldivesWorking = isBankWorking(date, cachedHolidays['MV'][maldivesDate], [5, 6]);
-    const sriLankaWorking = isBankWorking(date, cachedHolidays['LK'][sriLankaDate], [6, 0]);
-
-    return !(maldivesWorking || sriLankaWorking);
 }
+
+
+
+
 
 
 
