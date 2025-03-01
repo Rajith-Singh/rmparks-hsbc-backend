@@ -107,13 +107,13 @@ async function storeTransactions(transactionData) {
     }
 
     for (const transaction of transactionData) {
-        const transactionDataItems = transaction.items; // Transaction details are in 'items'
+        const transactionDataItems = transaction.items;  // Transaction details are in 'items'
 
         const transCode = generateTransCode();
         const collectionAcc = 'hsbc';
         const bankCode = 'HSBC';
         const branchCode = '7092001';
-        const custAcc = transactionDataItems.transactionInformation.split('/')[2].slice(0, 6); // Extract first 6 digits
+        //const custAcc = transactionDataItems.transactionInformation.split('/')[2].slice(0, 6);  // Extract first 6 digits
         const payCca = 'R001';
         const cOrD = transactionDataItems.creditDebitIndicator;
         const bankTransRef = transactionDataItems.transactionReference;
@@ -121,10 +121,129 @@ async function storeTransactions(transactionData) {
         const amount = transactionDataItems.transactionAmount.amount;
         const dipstrName = null;
 
+        // Extract account number from transactionInformation
+        const transactionInformation = transactionDataItems.transactionInformation;
+        const custAccMatch = transactionInformation.match(/\/VA\/(\d{10})\//);
+
+        let custAcc, errorDescCode;
+
+        if (custAccMatch && custAccMatch[1]) {
+            custAcc = custAccMatch[1].slice(0, 6); // First 6 digits
+
+            // Check if the customer number exists
+            const customerExists = await checkCustomerNumberExists(custAcc);
+
+            if (!customerExists) {
+                errorDescCode = 'CUSER';
+            
+                try {
+                    // Log the error details before inserting into the database
+                    logger.error(`Error Transaction Detected: Customer number does not exist. Details:
+                    TransCode: ${transCode},
+                    BankCode: ${bankCode},
+                    BranchCode: ${branchCode},
+                    CustAcc: ${custAcc},
+                    C_OR_D: ${cOrD},
+                    BankTransRef: ${bankTransRef},
+                    BankDate: ${bankDate},
+                    Amount: ${amount}`);
+            
+                    // Insert the transaction error into the database
+                    await insertTransactionError({
+                        transCode,
+                        errorDescCode,
+                        bankCode,
+                        branchCode,
+                        custAcc,
+                        cOrD,
+                        bankTransRef,
+                        bankDate,
+                        amount,
+                    });
+            
+                    // Log success after the transaction has been inserted
+                    logger.info(`Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: ${transCode},
+                    ErrorDescCode: ${errorDescCode}`);
+                } catch (error) {
+                    // Log any issues that occur during the database insertion
+                    logger.error(`Failed to Insert Error Transaction into TRANSACTION_ERROR_TMP:
+                    TransCode: ${transCode},
+                    ErrorDescCode: ${errorDescCode},
+                    Error: ${error.message}`);
+                }
+                continue;
+            } 
+            
+            if (custAccMatch[1].length !== 10) { // Ensure full account number has exactly 10 digits
+                errorDescCode = 'CUSLN';
+            
+                try {
+                    // Log the error details before inserting into the database
+                    logger.error(`Error Transaction Detected: Invalid account number length. Details:
+                    TransCode: ${transCode},
+                    BankCode: ${bankCode},
+                    BranchCode: ${branchCode},
+                    CustAcc: NULL,
+                    C_OR_D: ${cOrD},
+                    BankTransRef: ${bankTransRef},
+                    BankDate: ${bankDate},
+                    Amount: ${amount}`);
+            
+                    // Insert the transaction error into the database
+                    await insertTransactionError({
+                        transCode,
+                        errorDescCode,
+                        bankCode,
+                        branchCode,
+                        custAcc: null,
+                        cOrD,
+                        bankTransRef,
+                        bankDate,
+                        amount,
+                    });
+            
+                    // Log success after the transaction has been inserted
+                    logger.info(`Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: ${transCode},
+                    ErrorDescCode: ${errorDescCode}`);
+                } catch (error) {
+                    // Log any issues that occur during the database insertion
+                    logger.error(`Failed to Insert Error Transaction into TRANSACTION_ERROR_TMP:
+                    TransCode: ${transCode},
+                    ErrorDescCode: ${errorDescCode},
+                    Error: ${error.message}`);
+                }
+                continue;
+            }
+        }    
+
+        
+
+        // Check if it's a system holiday in either LK or MV
         const systemHoliday = await isSystemHoliday(bankDate);
 
         if (systemHoliday) {
+            // If it's a system holiday, get the next system working date
             const nextSystemWorkingDate = await getNextSystemWorkingDate(moment(bankDate));
+
+            // Insert into Transactions_TMP table
+            await insertTransaction({
+                transCode,
+                collectionAcc,
+                bankCode,
+                branchCode,
+                custAcc,
+                payCca,
+                cOrD,
+                bankTransRef,
+                bankDate,
+                amount,
+                dipstrName
+            });
+            logger.info(`Inserted transaction into Transactions_TMP for ${transCode}`);
+            
+            // Insert into Transactions_NonBusinessDates table with the next system working date
             await insertTransactionNonBusinessDate({
                 transCode,
                 collectionAcc,
@@ -142,6 +261,7 @@ async function storeTransactions(transactionData) {
             });
             logger.info(`Inserted transaction into Transactions_NonBusinessDates for ${transCode}`);
         } else {
+            // Insert into Transactions_TMP table with the bankDate
             await insertTransaction({
                 transCode,
                 collectionAcc,
@@ -157,6 +277,160 @@ async function storeTransactions(transactionData) {
             });
             logger.info(`Inserted transaction into Transactions_TMP for ${transCode}`);
         }
+    }
+}
+
+
+
+async function checkCustomerNumberExists(customerNumber) {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('CUSTOMER_NO', sql.NVarChar, customerNumber)
+            .query('SELECT COUNT(*) AS count FROM TBL_MAS_CUSTOMER WHERE CUSTOMER_NO = @CUSTOMER_NO');
+        return result.recordset[0].count > 0;
+    } catch (error) {
+        console.error('Error checking customer number existence:', error);
+        return false;
+    }
+}
+
+// Function to check if an error transaction already exists based on BANK_TRANS_REF
+async function checkDuplicateTransactionError(bankTransRef) {
+    try {
+        logger.info(`Checking for duplicate transaction error with BANK_TRANS_REF: ${bankTransRef}`);
+
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('BANK_TRANS_REF', sql.NVarChar, bankTransRef)
+            .query('SELECT COUNT(*) AS count FROM TransactionError_TMP WHERE BANK_TRANS_REF = @BANK_TRANS_REF');
+
+            const isDuplicate = result.recordset[0].count > 0;
+
+            if (isDuplicate) {
+                logger.warn(`Duplicate transaction error detected: BANK_TRANS_REF ${bankTransRef} already exists.`);
+            } else {
+                logger.info(`No duplicate found for BANK_TRANS_REF: ${bankTransRef}. Proceeding with insert.`);
+            }
+    
+            return isDuplicate;
+        } catch (error) {
+            logger.error(`Error checking duplicate transaction error for BANK_TRANS_REF: ${bankTransRef}`, error);
+            return false;
+        }
+    }
+
+
+// Function to check if a transaction already exists in Transactions_TMP
+async function checkDuplicateTransaction(bankTransRef) {
+    try {
+        logger.info(`Checking for duplicate transaction in Transactions_TMP with BANK_TRANS_REF: ${bankTransRef}`);
+
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('BANK_TRANS_REF', sql.NVarChar, bankTransRef)
+            .query('SELECT COUNT(*) AS count FROM Transactions_TMP WHERE BANK_TRANS_REF = @BANK_TRANS_REF');
+
+        const isDuplicate = result.recordset[0].count > 0;
+
+        if (isDuplicate) {
+            logger.warn(`Duplicate transaction detected in Transactions_TMP: BANK_TRANS_REF ${bankTransRef} already exists.`);
+        } else {
+            logger.info(`No duplicate found in Transactions_TMP for BANK_TRANS_REF: ${bankTransRef}. Proceeding with insert.`);
+        }
+
+        return isDuplicate;
+    } catch (error) {
+        logger.error(`Error checking duplicate transaction in Transactions_TMP for BANK_TRANS_REF: ${bankTransRef}`, error);
+        return false;
+    }
+}
+
+// Function to check if a transaction already exists in Transactions_NonBusinessDates
+async function checkDuplicateTransactionNonBusiness(bankTransRef) {
+    try {
+        logger.info(`Checking for duplicate transaction in Transactions_NonBusinessDates with BANK_TRANS_REF: ${bankTransRef}`);
+
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('BANK_TRANS_REF', sql.NVarChar, bankTransRef)
+            .query('SELECT COUNT(*) AS count FROM Transactions_NonBusinessDates WHERE BANK_TRANS_REF = @BANK_TRANS_REF');
+
+        const isDuplicate = result.recordset[0].count > 0;
+
+        if (isDuplicate) {
+            logger.warn(`Duplicate transaction detected in Transactions_NonBusinessDates: BANK_TRANS_REF ${bankTransRef} already exists.`);
+        } else {
+            logger.info(`No duplicate found in Transactions_NonBusinessDates for BANK_TRANS_REF: ${bankTransRef}. Proceeding with insert.`);
+        }
+
+        return isDuplicate;
+    } catch (error) {
+        logger.error(`Error checking duplicate transaction in Transactions_NonBusinessDates for BANK_TRANS_REF: ${bankTransRef}`, error);
+        return false;
+    }
+}
+
+async function insertTransactionError(transactionError) {
+    try {
+        // ✅ NEW: Check for duplicate transaction error before inserting
+        const isDuplicate = await checkDuplicateTransactionError(transactionError.bankTransRef);
+
+        if (isDuplicate) {
+            logger.warn(`Skipping insert: Duplicate transaction error detected for BANK_TRANS_REF: ${transactionError.bankTransRef}`);
+            console.warn(`Duplicate transaction error detected for BANK_TRANS_REF: ${transactionError.bankTransRef}. Skipping insert.`);
+            return; // Exit function if duplicate exists
+        }
+
+        logger.info(`Inserting new transaction error for BANK_TRANS_REF: ${transactionError.bankTransRef}`);
+
+
+        const pool = await sql.connect(dbConfig);
+        const request = pool.request()
+            .input('SYS_REF', sql.NVarChar, transactionError.transCode)
+            .input('ERROR_DES_CODE', sql.NVarChar, transactionError.errorDescCode)
+            .input('BANK_CODE', sql.NVarChar, transactionError.bankCode)
+            .input('BRANCH_CODE', sql.NVarChar, transactionError.branchCode)
+            .input('CUST_AC', sql.NVarChar, transactionError.custAcc || 'HSB')
+            .input('C_OR_D', sql.NVarChar, transactionError.cOrD)
+            .input('BANK_TRANS_REF', sql.NVarChar, transactionError.bankTransRef)
+            .input('BANK_DATE', sql.DateTime, transactionError.bankDate)
+            .input('AMOUNT', sql.Decimal(18, 2), transactionError.amount)
+            .input('ENTERED_BY', sql.NVarChar, 'WBSER')
+            .input('ENTERED_DATE', sql.DateTime, new Date())
+            .input('STATUS', sql.NVarChar, 'OPN')
+            .input('BANK_AUTH', sql.NVarChar, '80885630')
+            .input('DIPSTR_NAME', sql.NVarChar, null);
+
+        const result = await request.query(`
+            INSERT INTO TransactionError_TMP 
+            (SYS_REF, ERROR_DES_CODE, BANK_CODE, BRANCH_CODE, CUST_AC, C_OR_D, BANK_TRANS_REF, BANK_DATE, AMOUNT, DIPSTR_NAME, ENTERED_BY, ENTERED_DATE, STATUS) 
+            VALUES (@SYS_REF, @ERROR_DES_CODE, @BANK_CODE, @BRANCH_CODE, @CUST_AC, @C_OR_D, @BANK_TRANS_REF, @BANK_DATE, @AMOUNT, @DIPSTR_NAME, @ENTERED_BY, @ENTERED_DATE, @STATUS)
+        `);
+
+        if (result.rowsAffected[0] > 0) {
+            logger.info(`Transaction error successfully inserted into TransactionError_TMP for BANK_TRANS_REF: ${transactionError.bankTransRef}`);
+        } else {
+            logger.warn(`Insert operation completed, but no rows were affected for BANK_TRANS_REF: ${transactionError.bankTransRef}`);
+        }
+
+        console.info(`Transaction error inserted successfully for BANK_TRANS_REF: ${transactionError.bankTransRef}`, result.rowsAffected);
+    } catch (error) {
+        logger.error(`Error inserting transaction into TransactionError_TMP for BANK_TRANS_REF: ${transactionError.bankTransRef}`, error);
+        logger.error('Transaction Details:', JSON.stringify(transactionError, null, 2));
+        console.error('Error inserting transaction into TransactionError_TMP:', error.message);
+        console.error('Transaction Details:', transactionError);
+        console.error('SQL Request Values:', {
+            transCode: transactionError.transCode,
+            errorDescCode: transactionError.errorDescCode,
+            bankCode: transactionError.bankCode,
+            branchCode: transactionError.branchCode,
+            custAcc: transactionError.custAcc,
+            cOrD: transactionError.cOrD,
+            bankTransRef: transactionError.bankTransRef,
+            bankDate: transactionError.bankDate,
+            amount: transactionError.amount,
+        });
     }
 }
 
@@ -274,6 +548,15 @@ function generateTransCode() {
 // Function to insert transaction into Transactions_TMP table
 async function insertTransaction(transaction) {
     try {
+        const isDuplicate = await checkDuplicateTransaction(transaction.bankTransRef);
+
+        if (isDuplicate) {
+            logger.warn(`Skipping insert: Duplicate transaction detected in Transactions_TMP for BANK_TRANS_REF: ${transaction.bankTransRef}`);
+            return; // Exit function if duplicate exists
+        }
+
+        logger.info(`Inserting new transaction into Transactions_TMP for BANK_TRANS_REF: ${transaction.bankTransRef}`);
+
         const pool = await sql.connect(dbConfig);
         await pool.request()
             .input('TRANS_CODE', sql.NVarChar, transaction.transCode)
@@ -288,7 +571,10 @@ async function insertTransaction(transaction) {
             .input('AMOUNT', sql.Decimal(18, 2), transaction.amount)
             .input('DIPSTR_NAME', sql.NVarChar, transaction.dipstrName)
             .query('INSERT INTO Transactions_TMP (TRANS_CODE, COLLECTION_AC, BANK_CODE, BRANCH_CODE, CUST_AC, PAY_CCA, C_OR_D, BANK_TRANS_REF, BANK_DATE, AMOUNT, DIPSTR_NAME) VALUES (@TRANS_CODE, @COLLECTION_AC, @BANK_CODE, @BRANCH_CODE, @CUST_AC, @PAY_CCA, @C_OR_D, @BANK_TRANS_REF, @BANK_DATE, @AMOUNT, @DIPSTR_NAME)');
+            logger.info(`Transaction successfully inserted into Transactions_TMP for BANK_TRANS_REF: ${transaction.bankTransRef}`);
+
     } catch (error) {
+        logger.error(`Error inserting transaction into Transactions_TMP for BANK_TRANS_REF: ${transaction.bankTransRef}`, error);
         console.error('Error inserting transaction into Transactions_TMP:', error);
     }
 }
@@ -296,6 +582,16 @@ async function insertTransaction(transaction) {
 // Function to insert transaction into Transactions_NonBusinessDates table
 async function insertTransactionNonBusinessDate(transaction) {
     try {
+        // ✅ NEW: Check for duplicate transaction before inserting
+        const isDuplicate = await checkDuplicateTransactionNonBusiness(transaction.bankTransRef);
+
+        if (isDuplicate) {
+            logger.warn(`Skipping insert: Duplicate transaction detected in Transactions_NonBusinessDates for BANK_TRANS_REF: ${transaction.bankTransRef}`);
+            return; // Exit function if duplicate exists
+        }
+
+        logger.info(`Inserting new transaction into Transactions_NonBusinessDates for BANK_TRANS_REF: ${transaction.bankTransRef}`);
+
         const pool = await sql.connect(dbConfig);
         await pool.request()
             .input('TRANS_CODE', sql.NVarChar, transaction.transCode)
@@ -312,121 +608,13 @@ async function insertTransactionNonBusinessDate(transaction) {
             .input('NEXT_SYSTEM_WORKING_DATE', sql.Date, transaction.nextSystemWorkingDate)
             .input('REASON_FOR_NON_BUSINESS_DATE', sql.NVarChar, transaction.reasonForNonBusinessDate)
             .query('INSERT INTO Transactions_NonBusinessDates (TRANS_CODE, COLLECTION_AC, BANK_CODE, BRANCH_CODE, CUST_AC, PAY_CCA, C_OR_D, BANK_TRANS_REF, BANK_DATE, AMOUNT, DIPSTR_NAME, NEXT_SYSTEM_WORKING_DATE, REASON_FOR_NON_BUSINESS_DATE) VALUES (@TRANS_CODE, @COLLECTION_AC, @BANK_CODE, @BRANCH_CODE, @CUST_AC, @PAY_CCA, @C_OR_D, @BANK_TRANS_REF, @BANK_DATE, @AMOUNT, @DIPSTR_NAME, @NEXT_SYSTEM_WORKING_DATE, @REASON_FOR_NON_BUSINESS_DATE)');
-    } catch (error) {
+            logger.info(`Transaction successfully inserted into Transactions_NonBusinessDates for BANK_TRANS_REF: ${transaction.bankTransRef}`);
+        } catch (error) {
+            logger.error(`Error inserting transaction into Transactions_NonBusinessDates for BANK_TRANS_REF: ${transaction.bankTransRef}`, error);
         console.error('Error inserting transaction into Transactions_NonBusinessDates:', error);
     }
 }
 
-
-async function insertTransactionError(transactionError) {
-    try {
-        const pool = await sql.connect(dbConfig);
-        await pool.request()
-            .input('TRANS_CODE', sql.NVarChar, transactionError.transCode)
-            .input('ERROR_DES_CODE', sql.NVarChar, transactionError.errorDescCode)
-            .input('BANK_CODE', sql.NVarChar, transactionError.bankCode)
-            .input('BRANCH_CODE', sql.NVarChar, transactionError.branchCode)
-            .input('BANK_AUTH', sql.NVarChar, '88906656')
-            .input('CUST_AC', sql.NVarChar, transactionError.custAcc)
-            .input('C_OR_D', sql.NVarChar, transactionError.cOrD)
-            .input('BANK_TRANS_REF', sql.NVarChar, transactionError.bankTransRef)
-            .input('BANK_DATE', sql.DateTime, transactionError.bankDate)
-            .input('AMOUNT', sql.Decimal(18, 2), transactionError.amount)
-            .input('ENTERED_BY', sql.NVarChar, 'WBSER')
-            .input('ENTERED_DATE', sql.DateTime, new Date())
-            .input('STATUS', sql.NVarChar, 'OPN')
-            .query('INSERT INTO TRANSACTION_ERROR_TMP VALUES (@TRANS_CODE, @ERROR_DES_CODE, @BANK_CODE, @BRANCH_CODE, @BANK_AUTH, @CUST_AC, @C_OR_D, @BANK_TRANS_REF, @BANK_DATE, @AMOUNT, @ENTERED_BY, @ENTERED_DATE, @STATUS)');
-        console.log(`Error transaction logged: ${transactionError.transCode}`);
-    } catch (error) {
-        console.error('Error inserting transaction error:', error);
-    }
-}
-
-async function validateAndProcessTransaction(transaction) {
-    const transactionInfo = transaction.transactionInformation;
-    const match = transactionInfo.match(/\/VA\/(\d{10})/);
-
-    if (!match) {
-        await insertTransactionError({
-            transCode: transaction.transCode,
-            errorDescCode: 'CUSLN',
-            bankCode: 'HSBC',
-            branchCode: '7092001',
-            custAcc: null,
-            cOrD: transaction.creditDebitIndicator,
-            bankTransRef: transaction.transactionReference,
-            bankDate: transaction.valueDateTime,
-            amount: transaction.amount,
-        });
-        return;
-    }
-
-    const fullNumber = match[1];
-    const firstSixDigits = fullNumber.slice(0, 6);
-
-    const pool = await sql.connect(dbConfig);
-    const customerCheck = await pool.request()
-        .input('CUSTOMER_NO', sql.NVarChar, firstSixDigits)
-        .query('SELECT COUNT(*) AS count FROM MAS_CUSTOMER WHERE CUSTOMER_NO = @CUSTOMER_NO');
-
-    if (customerCheck.recordset[0].count === 0) {
-        await insertTransactionError({
-            transCode: transaction.transCode,
-            errorDescCode: 'CUSER',
-            bankCode: 'HSBC',
-            branchCode: '7092001',
-            custAcc: fullNumber,
-            cOrD: transaction.creditDebitIndicator,
-            bankTransRef: transaction.transactionReference,
-            bankDate: transaction.valueDateTime,
-            amount: transaction.amount,
-        });
-        return;
-    }
-
-    const isSystemHoliday = await isHoliday(moment(transaction.valueDateTime), 'LK') || 
-                            await isHoliday(moment(transaction.valueDateTime), 'MV');
-
-    if (isSystemHoliday) {
-        const nextWorkingDate = await getNextSystemWorkingDate(moment(transaction.valueDateTime));
-        await insertTransactionNonBusinessDate({
-            transCode: transaction.transCode,
-            collectionAcc: 'hsbc',
-            bankCode: 'HSBC',
-            branchCode: '7092001',
-            custAcc: fullNumber,
-            payCca: 'R001',
-            cOrD: transaction.creditDebitIndicator,
-            bankTransRef: transaction.transactionReference,
-            bankDate: transaction.valueDateTime,
-            amount: transaction.amount,
-            dipstrName: null,
-            nextSystemWorkingDate,
-            reasonForNonBusinessDate: 'System Holiday',
-        });
-    } else {
-        await insertTransaction({
-            transCode: transaction.transCode,
-            collectionAcc: 'hsbc',
-            bankCode: 'HSBC',
-            branchCode: '7092001',
-            custAcc: fullNumber,
-            payCca: 'R001',
-            cOrD: transaction.creditDebitIndicator,
-            bankTransRef: transaction.transactionReference,
-            bankDate: transaction.valueDateTime,
-            amount: transaction.amount,
-            dipstrName: null,
-        });
-    }
-}
-
-async function storeTransactions(transactionData) {
-    for (const transaction of transactionData) {
-        transaction.transCode = `HSB${Math.floor(1000000 + Math.random() * 9000000)}`;
-        await validateAndProcessTransaction(transaction);
-    }
-}
 
 // Check if today is a holiday for both Sri Lanka (LK) and Maldives (MV)
 async function isSystemHoliday(date) {
