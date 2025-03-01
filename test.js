@@ -107,13 +107,13 @@ async function storeTransactions(transactionData) {
     }
 
     for (const transaction of transactionData) {
-        const transactionDataItems = transaction.items;  // Transaction details are in 'items'
+        const transactionDataItems = transaction.items; // Transaction details are in 'items'
 
         const transCode = generateTransCode();
         const collectionAcc = 'hsbc';
         const bankCode = 'HSBC';
         const branchCode = '7092001';
-        const custAcc = transactionDataItems.transactionInformation.split('/')[2].slice(0, 6);  // Extract first 6 digits
+        const custAcc = transactionDataItems.transactionInformation.split('/')[2].slice(0, 6); // Extract first 6 digits
         const payCca = 'R001';
         const cOrD = transactionDataItems.creditDebitIndicator;
         const bankTransRef = transactionDataItems.transactionReference;
@@ -121,14 +121,10 @@ async function storeTransactions(transactionData) {
         const amount = transactionDataItems.transactionAmount.amount;
         const dipstrName = null;
 
-        // Check if it's a system holiday in either LK or MV
         const systemHoliday = await isSystemHoliday(bankDate);
 
         if (systemHoliday) {
-            // If it's a system holiday, get the next system working date
             const nextSystemWorkingDate = await getNextSystemWorkingDate(moment(bankDate));
-            
-            // Insert into Transactions_NonBusinessDates table with the next system working date
             await insertTransactionNonBusinessDate({
                 transCode,
                 collectionAcc,
@@ -146,7 +142,6 @@ async function storeTransactions(transactionData) {
             });
             logger.info(`Inserted transaction into Transactions_NonBusinessDates for ${transCode}`);
         } else {
-            // Insert into Transactions_TMP table with the bankDate
             await insertTransaction({
                 transCode,
                 collectionAcc,
@@ -164,9 +159,6 @@ async function storeTransactions(transactionData) {
         }
     }
 }
-
-
-
 
 
 
@@ -222,7 +214,6 @@ async function decryptWithPython(encryptedData) {
 }
 
 
-// Fetch transactions from HSBC with signing and encryption
 // Fetch transactions from HSBC with signing and encryption
 async function fetchTransactions(transactionDate) {
     const clientPrivateKey = await loadPGPKey('client-private.pem');
@@ -326,6 +317,116 @@ async function insertTransactionNonBusinessDate(transaction) {
     }
 }
 
+
+async function insertTransactionError(transactionError) {
+    try {
+        const pool = await sql.connect(dbConfig);
+        await pool.request()
+            .input('TRANS_CODE', sql.NVarChar, transactionError.transCode)
+            .input('ERROR_DES_CODE', sql.NVarChar, transactionError.errorDescCode)
+            .input('BANK_CODE', sql.NVarChar, transactionError.bankCode)
+            .input('BRANCH_CODE', sql.NVarChar, transactionError.branchCode)
+            .input('BANK_AUTH', sql.NVarChar, '88906656')
+            .input('CUST_AC', sql.NVarChar, transactionError.custAcc)
+            .input('C_OR_D', sql.NVarChar, transactionError.cOrD)
+            .input('BANK_TRANS_REF', sql.NVarChar, transactionError.bankTransRef)
+            .input('BANK_DATE', sql.DateTime, transactionError.bankDate)
+            .input('AMOUNT', sql.Decimal(18, 2), transactionError.amount)
+            .input('ENTERED_BY', sql.NVarChar, 'WBSER')
+            .input('ENTERED_DATE', sql.DateTime, new Date())
+            .input('STATUS', sql.NVarChar, 'OPN')
+            .query('INSERT INTO TRANSACTION_ERROR_TMP VALUES (@TRANS_CODE, @ERROR_DES_CODE, @BANK_CODE, @BRANCH_CODE, @BANK_AUTH, @CUST_AC, @C_OR_D, @BANK_TRANS_REF, @BANK_DATE, @AMOUNT, @ENTERED_BY, @ENTERED_DATE, @STATUS)');
+        console.log(`Error transaction logged: ${transactionError.transCode}`);
+    } catch (error) {
+        console.error('Error inserting transaction error:', error);
+    }
+}
+
+async function validateAndProcessTransaction(transaction) {
+    const transactionInfo = transaction.transactionInformation;
+    const match = transactionInfo.match(/\/VA\/(\d{10})/);
+
+    if (!match) {
+        await insertTransactionError({
+            transCode: transaction.transCode,
+            errorDescCode: 'CUSLN',
+            bankCode: 'HSBC',
+            branchCode: '7092001',
+            custAcc: null,
+            cOrD: transaction.creditDebitIndicator,
+            bankTransRef: transaction.transactionReference,
+            bankDate: transaction.valueDateTime,
+            amount: transaction.amount,
+        });
+        return;
+    }
+
+    const fullNumber = match[1];
+    const firstSixDigits = fullNumber.slice(0, 6);
+
+    const pool = await sql.connect(dbConfig);
+    const customerCheck = await pool.request()
+        .input('CUSTOMER_NO', sql.NVarChar, firstSixDigits)
+        .query('SELECT COUNT(*) AS count FROM MAS_CUSTOMER WHERE CUSTOMER_NO = @CUSTOMER_NO');
+
+    if (customerCheck.recordset[0].count === 0) {
+        await insertTransactionError({
+            transCode: transaction.transCode,
+            errorDescCode: 'CUSER',
+            bankCode: 'HSBC',
+            branchCode: '7092001',
+            custAcc: fullNumber,
+            cOrD: transaction.creditDebitIndicator,
+            bankTransRef: transaction.transactionReference,
+            bankDate: transaction.valueDateTime,
+            amount: transaction.amount,
+        });
+        return;
+    }
+
+    const isSystemHoliday = await isHoliday(moment(transaction.valueDateTime), 'LK') || 
+                            await isHoliday(moment(transaction.valueDateTime), 'MV');
+
+    if (isSystemHoliday) {
+        const nextWorkingDate = await getNextSystemWorkingDate(moment(transaction.valueDateTime));
+        await insertTransactionNonBusinessDate({
+            transCode: transaction.transCode,
+            collectionAcc: 'hsbc',
+            bankCode: 'HSBC',
+            branchCode: '7092001',
+            custAcc: fullNumber,
+            payCca: 'R001',
+            cOrD: transaction.creditDebitIndicator,
+            bankTransRef: transaction.transactionReference,
+            bankDate: transaction.valueDateTime,
+            amount: transaction.amount,
+            dipstrName: null,
+            nextSystemWorkingDate,
+            reasonForNonBusinessDate: 'System Holiday',
+        });
+    } else {
+        await insertTransaction({
+            transCode: transaction.transCode,
+            collectionAcc: 'hsbc',
+            bankCode: 'HSBC',
+            branchCode: '7092001',
+            custAcc: fullNumber,
+            payCca: 'R001',
+            cOrD: transaction.creditDebitIndicator,
+            bankTransRef: transaction.transactionReference,
+            bankDate: transaction.valueDateTime,
+            amount: transaction.amount,
+            dipstrName: null,
+        });
+    }
+}
+
+async function storeTransactions(transactionData) {
+    for (const transaction of transactionData) {
+        transaction.transCode = `HSB${Math.floor(1000000 + Math.random() * 9000000)}`;
+        await validateAndProcessTransaction(transaction);
+    }
+}
 
 // Check if today is a holiday for both Sri Lanka (LK) and Maldives (MV)
 async function isSystemHoliday(date) {

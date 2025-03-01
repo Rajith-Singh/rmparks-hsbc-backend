@@ -135,37 +135,86 @@ async function storeTransactions(transactionData) {
 
             if (!customerExists) {
                 errorDescCode = 'CUSER';
-                await insertTransactionError({
-                    transCode,
-                    errorDescCode,
-                    bankCode,
-                    branchCode,
-                    custAcc,
-                    cOrD,
-                    bankTransRef,
-                    bankDate,
-                    amount,
-                });
-                logger.error(`Customer number does not exist. Inserted into TBL_TRANSACTION_ERROR with code ${errorDescCode}`);
+            
+                try {
+                    // Log the error details before inserting into the database
+                    logger.error(`Error Transaction Detected: Customer number does not exist. Details:
+                    TransCode: ${transCode},
+                    BankCode: ${bankCode},
+                    BranchCode: ${branchCode},
+                    CustAcc: ${custAcc},
+                    C_OR_D: ${cOrD},
+                    BankTransRef: ${bankTransRef},
+                    BankDate: ${bankDate},
+                    Amount: ${amount}`);
+            
+                    // Insert the transaction error into the database
+                    await insertTransactionError({
+                        transCode,
+                        errorDescCode,
+                        bankCode,
+                        branchCode,
+                        custAcc,
+                        cOrD,
+                        bankTransRef,
+                        bankDate,
+                        amount,
+                    });
+            
+                    // Log success after the transaction has been inserted
+                    logger.info(`Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: ${transCode},
+                    ErrorDescCode: ${errorDescCode}`);
+                } catch (error) {
+                    // Log any issues that occur during the database insertion
+                    logger.error(`Failed to Insert Error Transaction into TRANSACTION_ERROR_TMP:
+                    TransCode: ${transCode},
+                    ErrorDescCode: ${errorDescCode},
+                    Error: ${error.message}`);
+                }
+                continue;
+            } else {
+                errorDescCode = 'CUSLN';
+            
+                try {
+                    // Log the error details before inserting into the database
+                    logger.error(`Error Transaction Detected: Invalid account number length. Details:
+                    TransCode: ${transCode},
+                    BankCode: ${bankCode},
+                    BranchCode: ${branchCode},
+                    CustAcc: NULL,
+                    C_OR_D: ${cOrD},
+                    BankTransRef: ${bankTransRef},
+                    BankDate: ${bankDate},
+                    Amount: ${amount}`);
+            
+                    // Insert the transaction error into the database
+                    await insertTransactionError({
+                        transCode,
+                        errorDescCode,
+                        bankCode,
+                        branchCode,
+                        custAcc: null,
+                        cOrD,
+                        bankTransRef,
+                        bankDate,
+                        amount,
+                    });
+            
+                    // Log success after the transaction has been inserted
+                    logger.info(`Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: ${transCode},
+                    ErrorDescCode: ${errorDescCode}`);
+                } catch (error) {
+                    // Log any issues that occur during the database insertion
+                    logger.error(`Failed to Insert Error Transaction into TRANSACTION_ERROR_TMP:
+                    TransCode: ${transCode},
+                    ErrorDescCode: ${errorDescCode},
+                    Error: ${error.message}`);
+                }
                 continue;
             }
-        } else {
-            errorDescCode = 'CUSLN';
-            await insertTransactionError({
-                transCode,
-                errorDescCode,
-                bankCode,
-                branchCode,
-                custAcc: null,
-                cOrD,
-                bankTransRef,
-                bankDate,
-                amount,
-            });
-            logger.error(`Invalid account number length. Inserted into TBL_TRANSACTION_ERROR with code ${errorDescCode}`);
-            continue;
-        }
-
+        }    
 
         
 
@@ -175,6 +224,22 @@ async function storeTransactions(transactionData) {
         if (systemHoliday) {
             // If it's a system holiday, get the next system working date
             const nextSystemWorkingDate = await getNextSystemWorkingDate(moment(bankDate));
+
+            // Insert into Transactions_TMP table
+            await insertTransaction({
+                transCode,
+                collectionAcc,
+                bankCode,
+                branchCode,
+                custAcc,
+                payCca,
+                cOrD,
+                bankTransRef,
+                bankDate,
+                amount,
+                dipstrName
+            });
+            logger.info(`Inserted transaction into Transactions_TMP for ${transCode}`);
             
             // Insert into Transactions_NonBusinessDates table with the next system working date
             await insertTransactionNonBusinessDate({
@@ -232,27 +297,43 @@ async function checkCustomerNumberExists(customerNumber) {
 async function insertTransactionError(transactionError) {
     try {
         const pool = await sql.connect(dbConfig);
-        await pool.request()
+        const request = pool.request()
             .input('SYS_REF', sql.NVarChar, transactionError.transCode)
             .input('ERROR_DES_CODE', sql.NVarChar, transactionError.errorDescCode)
             .input('BANK_CODE', sql.NVarChar, transactionError.bankCode)
             .input('BRANCH_CODE', sql.NVarChar, transactionError.branchCode)
-            .input('CUST_AC', sql.NVarChar, transactionError.custAcc)
+            .input('CUST_AC', sql.NVarChar, transactionError.custAcc || 'HSB')
             .input('C_OR_D', sql.NVarChar, transactionError.cOrD)
             .input('BANK_TRANS_REF', sql.NVarChar, transactionError.bankTransRef)
             .input('BANK_DATE', sql.DateTime, transactionError.bankDate)
             .input('AMOUNT', sql.Decimal(18, 2), transactionError.amount)
-            .input('ERROR_DESC_CODE', sql.NVarChar, transactionError.errorDescCode)
-            .input('ENTERED_BY', sql.NVarChar, 'WBSER') // Hardcoded value
-            .input('ENTERED_DATE', sql.DateTime, new Date()) // Current timestamp
-            .input('STATUS', sql.NVarChar, 'OPN') // Hardcoded value
-            .input('BANK_AUTH', sql.NVarChar, '80885630') // Hardcoded value for BANK_AUTH
-            .input('DIPSTR_NAME', sql.NVarChar, null) // NULL value for SIPSTR_NAME
-            .query(`INSERT INTO TBL_TRANSACTION_ERROR 
-                (SYS_REF, ERROR_DESC_CODE, BANK_AUTH, BANK_CODE, BRANCH_CODE, CUST_AC, C_OR_D, BANK_TRANS_REF, BANK_DATE, AMOUNT, DIPSTR_NAME, ENTERED_BY, ENTERED_DATE, STATUS) 
-                VALUES (@TRANS_CODE, @COLLECTION_AC, @BANK_CODE, @BRANCH_CODE, @CUST_AC, @C_OR_D, @BANK_TRANS_REF, @BANK_DATE, @AMOUNT, @DIPSTR_NAME, @ENTERED_BY, @ENTERED_DATE, @STATUS)`);
+            .input('ENTERED_BY', sql.NVarChar, 'WBSER')
+            .input('ENTERED_DATE', sql.DateTime, new Date())
+            .input('STATUS', sql.NVarChar, 'OPN')
+            .input('BANK_AUTH', sql.NVarChar, '80885630')
+            .input('DIPSTR_NAME', sql.NVarChar, null);
+
+        const result = await request.query(`
+            INSERT INTO TBL_TRANSACTION_ERROR 
+            (SYS_REF, ERROR_DES_CODE, BANK_CODE, BRANCH_CODE, CUST_AC, C_OR_D, BANK_TRANS_REF, BANK_DATE, AMOUNT, DIPSTR_NAME, ENTERED_BY, ENTERED_DATE, STATUS) 
+            VALUES (@SYS_REF, @ERROR_DES_CODE, @BANK_CODE, @BRANCH_CODE, @CUST_AC, @C_OR_D, @BANK_TRANS_REF, @BANK_DATE, @AMOUNT, @DIPSTR_NAME, @ENTERED_BY, @ENTERED_DATE, @STATUS)
+        `);
+
+        console.info('Transaction error inserted successfully:', result.rowsAffected);
     } catch (error) {
-        console.error('Error inserting transaction into TBL_TRANSACTION_ERROR:', error);
+        console.error('Error inserting transaction into TRANSACTION_ERROR_TMP:', error.message);
+        console.error('Transaction Details:', transactionError);
+        console.error('SQL Request Values:', {
+            transCode: transactionError.transCode,
+            errorDescCode: transactionError.errorDescCode,
+            bankCode: transactionError.bankCode,
+            branchCode: transactionError.branchCode,
+            custAcc: transactionError.custAcc,
+            cOrD: transactionError.cOrD,
+            bankTransRef: transactionError.bankTransRef,
+            bankDate: transactionError.bankDate,
+            amount: transactionError.amount,
+        });
     }
 }
 
