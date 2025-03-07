@@ -110,8 +110,8 @@ async function storeTransactions(transactionData) {
         const transactionDataItems = transaction.items;  // Transaction details are in 'items'
 
         const transCode = generateTransCode();
-        const collectionAcc = 'hsbc';
-        const bankCode = 'HSBC';
+        const collectionAcc = 'HSB';
+        const bankCode = 'HSB';
         const branchCode = '7092001';
         //const custAcc = transactionDataItems.transactionInformation.split('/')[2].slice(0, 6);  // Extract first 6 digits
         const payCca = 'R001';
@@ -123,86 +123,42 @@ async function storeTransactions(transactionData) {
 
         // Extract account number from transactionInformation
         const transactionInformation = transactionDataItems.transactionInformation;
-        const custAccMatch = transactionInformation.match(/\/VA\/(\d{10})\//);
+        const custAccMatch = transactionInformation.match(/\/VA\/(\d{10,})\//); // Match account numbers with 10 or more digits
 
         let custAcc, errorDescCode;
 
         if (custAccMatch && custAccMatch[1]) {
-            custAcc = custAccMatch[1].slice(0, 6); // First 6 digits
-
-            // Check if the customer number exists
-            const customerExists = await checkCustomerNumberExists(custAcc);
-
-            if (!customerExists) {
-                errorDescCode = 'CUSER';
+            const fullAccountNumber = custAccMatch[1]; // Full account number (could be more than 10 digits)
             
-                try {
-                    // Log the error details before inserting into the database
-                    logger.error(`Error Transaction Detected: Customer number does not exist. Details:
-                    TransCode: ${transCode},
-                    BankCode: ${bankCode},
-                    BranchCode: ${branchCode},
-                    CustAcc: ${custAcc},
-                    C_OR_D: ${cOrD},
-                    BankTransRef: ${bankTransRef},
-                    BankDate: ${bankDate},
-                    Amount: ${amount}`);
-            
-                    // Insert the transaction error into the database
-                    await insertTransactionError({
-                        transCode,
-                        errorDescCode,
-                        bankCode,
-                        branchCode,
-                        custAcc,
-                        cOrD,
-                        bankTransRef,
-                        bankDate,
-                        amount,
-                    });
-            
-                    // Log success after the transaction has been inserted
-                    logger.info(`Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
-                    TransCode: ${transCode},
-                    ErrorDescCode: ${errorDescCode}`);
-                } catch (error) {
-                    // Log any issues that occur during the database insertion
-                    logger.error(`Failed to Insert Error Transaction into TRANSACTION_ERROR_TMP:
-                    TransCode: ${transCode},
-                    ErrorDescCode: ${errorDescCode},
-                    Error: ${error.message}`);
-                }
-                continue;
-            } 
-            
-            if (custAccMatch[1].length !== 10) { // Ensure full account number has exactly 10 digits
+            // Step 1: Check if the account number is less than or greater than 10 digits
+            if (fullAccountNumber.length !== 10) {
                 errorDescCode = 'CUSLN';
-            
+
+                // Log the error when account number is not exactly 10 digits
+                logger.error(`Error Transaction Detected: Account number length is invalid. Details:
+                TransCode: ${transCode},
+                BankCode: ${bankCode},
+                BranchCode: ${branchCode},
+                CustAcc: ${fullAccountNumber},  // Full account number (either less than or greater than 10 digits)
+                C_OR_D: ${cOrD},
+                BankTransRef: ${bankTransRef},
+                BankDate: ${bankDate},
+                Amount: ${amount}`);
+
                 try {
-                    // Log the error details before inserting into the database
-                    logger.error(`Error Transaction Detected: Invalid account number length. Details:
-                    TransCode: ${transCode},
-                    BankCode: ${bankCode},
-                    BranchCode: ${branchCode},
-                    CustAcc: NULL,
-                    C_OR_D: ${cOrD},
-                    BankTransRef: ${bankTransRef},
-                    BankDate: ${bankDate},
-                    Amount: ${amount}`);
-            
                     // Insert the transaction error into the database
                     await insertTransactionError({
                         transCode,
                         errorDescCode,
                         bankCode,
                         branchCode,
-                        custAcc: null,
+                        custAcc: fullAccountNumber,  // Full account number
                         cOrD,
                         bankTransRef,
                         bankDate,
                         amount,
                     });
-            
+
                     // Log success after the transaction has been inserted
                     logger.info(`Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
                     TransCode: ${transCode},
@@ -216,7 +172,79 @@ async function storeTransactions(transactionData) {
                 }
                 continue;
             }
-        }    
+
+            // Step 2: If account number is exactly 10 digits, check if customer exists using first 6 digits
+            custAcc = fullAccountNumber.slice(0, 6);  // First 6 digits
+
+            const customerExists = await checkCustomerNumberExists(custAcc);
+
+            if (!customerExists) {
+                errorDescCode = 'CUSER';
+
+                try {
+                    // Log the error details before inserting into the database
+                    logger.error(`Error Transaction Detected: Customer number does not exist. Details:
+                    TransCode: ${transCode},
+                    BankCode: ${bankCode},
+                    BranchCode: ${branchCode},
+                    CustAcc: ${custAcc},
+                    C_OR_D: ${cOrD},
+                    BankTransRef: ${bankTransRef},
+                    BankDate: ${bankDate},
+                    Amount: ${amount}`);
+
+                    // Insert the transaction error into the database
+                    await insertTransactionError({
+                        transCode,
+                        errorDescCode,
+                        bankCode,
+                        branchCode,
+                        custAcc,
+                        cOrD,
+                        bankTransRef,
+                        bankDate,
+                        amount,
+                    });
+
+                    // Log success after the transaction has been inserted
+                    logger.info(`Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: ${transCode},
+                    ErrorDescCode: ${errorDescCode}`);
+                } catch (error) {
+                    // Log any issues that occur during the database insertion
+                    logger.error(`Failed to Insert Error Transaction into TRANSACTION_ERROR_TMP:
+                    TransCode: ${transCode},
+                    ErrorDescCode: ${errorDescCode},
+                    Error: ${error.message}`);
+                }
+                continue;
+            }
+
+            // **Insert the transaction into the Transactions_TMP table if the account number is valid**
+            try {
+                // Insert the transaction into Transactions_TMP
+                await insertTransaction({
+                    transCode,
+                    collectionAcc,
+                    bankCode,
+                    branchCode,
+                    custAcc,
+                    payCca,
+                    cOrD,
+                    bankTransRef,
+                    bankDate,
+                    amount,
+                    dipstrName,
+                });
+
+                // Log success after the transaction has been inserted into Transactions_TMP
+                logger.info(`Inserted transaction into Transactions_TMP for ${transCode}`);
+            } catch (error) {
+                logger.error(`Failed to Insert Transaction into Transactions_TMP for ${transCode}:`, error);
+            }
+        }
+
+   
 
         
 
@@ -260,23 +288,7 @@ async function storeTransactions(transactionData) {
                 reasonForNonBusinessDate: 'System Holiday'
             });
             logger.info(`Inserted transaction into Transactions_NonBusinessDates for ${transCode}`);
-        } else {
-            // Insert into Transactions_TMP table with the bankDate
-            await insertTransaction({
-                transCode,
-                collectionAcc,
-                bankCode,
-                branchCode,
-                custAcc,
-                payCca,
-                cOrD,
-                bankTransRef,
-                bankDate,
-                amount,
-                dipstrName
-            });
-            logger.info(`Inserted transaction into Transactions_TMP for ${transCode}`);
-        }
+        } 
     }
 }
 

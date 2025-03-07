@@ -1,0 +1,289 @@
+2025-03-06T11:26:54.520Z info: Server running on http://localhost:3020
+2025-03-06T11:27:54.521Z info: Checking transactions for 2025-03-06
+2025-03-06T11:27:54.539Z info: Fetching transactions for date: 2025-03-06
+2025-03-06T11:27:57.083Z info: Fetched transactions for 2025-03-06: undefined transactions
+2025-03-06T11:27:57.093Z info: New day detected, fetching holiday data...
+2025-03-06T11:27:57.564Z info: Fetched holidays for LK on 2025-03-06
+2025-03-06T11:27:57.732Z info: Fetched holidays for MV on 2025-03-06
+2025-03-06T11:28:54.530Z info: Checking transactions for 2025-03-06
+2025-03-06T11:28:54.533Z info: Fetching transactions for date: 2025-03-06
+2025-03-06T11:28:57.162Z info: Fetched transactions for 2025-03-06: undefined transactions
+2025-03-06T11:28:57.162Z info: Holiday check for 2025-03-06: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:28:57.163Z info: No system holiday on 2025-03-06
+2025-03-06T11:28:57.290Z info: Checking for duplicate transaction in Transactions_TMP with BANK_TRANS_REF: 4333261345
+2025-03-06T11:28:57.313Z info: No duplicate found in Transactions_TMP for BANK_TRANS_REF: 4333261345. Proceeding with insert.
+2025-03-06T11:28:57.313Z info: Inserting new transaction into Transactions_TMP for BANK_TRANS_REF: 4333261345
+2025-03-06T11:28:57.338Z info: Transaction successfully inserted into Transactions_TMP for BANK_TRANS_REF: 4333261345
+2025-03-06T11:28:57.339Z info: Inserted transaction into Transactions_TMP for SRRJ5ZLA
+2025-03-06T11:28:57.340Z info: Holiday check for 2025-03-05: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:28:57.340Z info: No system holiday on 2025-03-05
+2025-03-06T11:28:57.359Z info: Checking for duplicate transaction in Transactions_TMP with BANK_TRANS_REF: 4354321345
+2025-03-06T11:28:57.378Z info: No duplicate found in Transactions_TMP for BANK_TRANS_REF: 4354321345. Proceeding with insert.
+2025-03-06T11:28:57.378Z info: Inserting new transaction into Transactions_TMP for BANK_TRANS_REF: 4354321345
+2025-03-06T11:28:57.398Z info: Transaction successfully inserted into Transactions_TMP for BANK_TRANS_REF: 4354321345
+2025-03-06T11:28:57.399Z info: Inserted transaction into Transactions_TMP for N0BG2CY8
+2025-03-06T11:28:57.400Z info: Holiday check for 2025-03-05: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:28:57.400Z info: No system holiday on 2025-03-05
+2025-03-06T11:28:57.401Z error: Error Transaction Detected: Account number length is invalid. Details:
+                TransCode: EIAZTW7A,
+                BankCode: HSB,
+                BranchCode: 7092001,
+                CustAcc: 61000001410,  // Full account number (either less than or greater than 10 digits)
+                C_OR_D: C,
+                BankTransRef: 6222345676,
+                BankDate: 2025-03-06,
+                Amount: 2416544.39
+2025-03-06T11:28:57.402Z info: Checking for duplicate transaction error with BANK_TRANS_REF: 6222345676
+2025-03-06T11:28:57.421Z info: No duplicate found for BANK_TRANS_REF: 6222345676. Proceeding with insert.
+2025-03-06T11:28:57.422Z info: Inserting new transaction error for BANK_TRANS_REF: 6222345676
+2025-03-06T11:28:57.442Z info: Transaction error successfully inserted into TransactionError_TMP for BANK_TRANS_REF: 6222345676
+2025-03-06T11:28:57.444Z info: Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: EIAZTW7A,
+                    ErrorDescCode: CUSLN
+2025-03-06T11:28:57.460Z error: Error Transaction Detected: Customer number does not exist. Details:
+                    TransCode: SCOFHSLG,
+                    BankCode: HSB,
+                    BranchCode: 7092001,
+                    CustAcc: 610006,
+                    C_OR_D: C,
+                    BankTransRef: 6573245676,
+                    BankDate: 2025-03-06,
+                    Amount: 3416544.49
+2025-03-06T11:28:57.461Z info: Checking for duplicate transaction error with BANK_TRANS_REF: 6573245676
+2025-03-06T11:28:57.479Z info: No duplicate found for BANK_TRANS_REF: 6573245676. Proceeding with insert.
+2025-03-06T11:28:57.480Z info: Inserting new transaction error for BANK_TRANS_REF: 6573245676
+2025-03-06T11:28:57.501Z info: Transaction error successfully inserted into TransactionError_TMP for BANK_TRANS_REF: 6573245676
+2025-03-06T11:28:57.502Z info: Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: SCOFHSLG,
+                    ErrorDescCode: CUSER
+2025-03-06T11:28:57.519Z info: Checking for duplicate transaction in Transactions_TMP with BANK_TRANS_REF: 7202036654
+2025-03-06T11:28:57.537Z info: No duplicate found in Transactions_TMP for BANK_TRANS_REF: 7202036654. Proceeding with insert.
+2025-03-06T11:28:57.538Z info: Inserting new transaction into Transactions_TMP for BANK_TRANS_REF: 7202036654
+2025-03-06T11:28:57.560Z info: Transaction successfully inserted into Transactions_TMP for BANK_TRANS_REF: 7202036654
+2025-03-06T11:28:57.560Z info: Inserted transaction into Transactions_TMP for 09XRXQBL
+2025-03-06T11:28:57.561Z info: Holiday check for 2025-03-05: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:28:57.561Z info: No system holiday on 2025-03-05
+2025-03-06T11:28:57.580Z error: Error Transaction Detected: Customer number does not exist. Details:
+                    TransCode: LV6QY98P,
+                    BankCode: HSB,
+                    BranchCode: 7092001,
+                    CustAcc: 610005,
+                    C_OR_D: C,
+                    BankTransRef: 7556436654,
+                    BankDate: 2025-03-06,
+                    Amount: 3516564.55
+2025-03-06T11:28:57.580Z info: Checking for duplicate transaction error with BANK_TRANS_REF: 7556436654
+2025-03-06T11:28:57.598Z info: No duplicate found for BANK_TRANS_REF: 7556436654. Proceeding with insert.
+2025-03-06T11:28:57.599Z info: Inserting new transaction error for BANK_TRANS_REF: 7556436654
+2025-03-06T11:28:57.616Z info: Transaction error successfully inserted into TransactionError_TMP for BANK_TRANS_REF: 7556436654
+2025-03-06T11:28:57.617Z info: Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: LV6QY98P,
+                    ErrorDescCode: CUSER
+2025-03-06T11:28:57.621Z info: Transactions for 2025-03-06: 6 transactions
+2025-03-06T11:29:54.533Z info: Checking transactions for 2025-03-06
+2025-03-06T11:29:54.538Z info: Fetching transactions for date: 2025-03-06
+2025-03-06T11:29:57.070Z info: Fetched transactions for 2025-03-06: undefined transactions
+2025-03-06T11:29:57.071Z info: Holiday check for 2025-03-06: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:29:57.071Z info: No system holiday on 2025-03-06
+2025-03-06T11:29:57.130Z info: Checking for duplicate transaction in Transactions_TMP with BANK_TRANS_REF: 4333261345
+2025-03-06T11:29:57.149Z warn: Duplicate transaction detected in Transactions_TMP: BANK_TRANS_REF 4333261345 already exists.
+2025-03-06T11:29:57.149Z warn: Skipping insert: Duplicate transaction detected in Transactions_TMP for BANK_TRANS_REF: 4333261345
+2025-03-06T11:29:57.149Z info: Inserted transaction into Transactions_TMP for KEZMYZ7Y
+2025-03-06T11:29:57.150Z info: Holiday check for 2025-03-05: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:29:57.150Z info: No system holiday on 2025-03-05
+2025-03-06T11:29:57.168Z info: Checking for duplicate transaction in Transactions_TMP with BANK_TRANS_REF: 4354321345
+2025-03-06T11:29:57.187Z warn: Duplicate transaction detected in Transactions_TMP: BANK_TRANS_REF 4354321345 already exists.
+2025-03-06T11:29:57.187Z warn: Skipping insert: Duplicate transaction detected in Transactions_TMP for BANK_TRANS_REF: 4354321345
+2025-03-06T11:29:57.188Z info: Inserted transaction into Transactions_TMP for RZA29UDL
+2025-03-06T11:29:57.188Z info: Holiday check for 2025-03-05: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:29:57.189Z info: No system holiday on 2025-03-05
+2025-03-06T11:29:57.189Z error: Error Transaction Detected: Account number length is invalid. Details:
+                TransCode: SEX323KW,
+                BankCode: HSB,
+                BranchCode: 7092001,
+                CustAcc: 61000001410,  // Full account number (either less than or greater than 10 digits)
+                C_OR_D: C,
+                BankTransRef: 6222345676,
+                BankDate: 2025-03-06,
+                Amount: 2416544.39
+2025-03-06T11:29:57.189Z info: Checking for duplicate transaction error with BANK_TRANS_REF: 6222345676
+2025-03-06T11:29:57.206Z warn: Duplicate transaction error detected: BANK_TRANS_REF 6222345676 already exists.
+2025-03-06T11:29:57.207Z warn: Skipping insert: Duplicate transaction error detected for BANK_TRANS_REF: 6222345676
+2025-03-06T11:29:57.207Z info: Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: SEX323KW,
+                    ErrorDescCode: CUSLN
+2025-03-06T11:29:57.225Z error: Error Transaction Detected: Customer number does not exist. Details:
+                    TransCode: Y5XSY183,
+                    BankCode: HSB,
+                    BranchCode: 7092001,
+                    CustAcc: 610006,
+                    C_OR_D: C,
+                    BankTransRef: 6573245676,
+                    BankDate: 2025-03-06,
+                    Amount: 3416544.49
+2025-03-06T11:29:57.226Z info: Checking for duplicate transaction error with BANK_TRANS_REF: 6573245676
+2025-03-06T11:29:57.243Z warn: Duplicate transaction error detected: BANK_TRANS_REF 6573245676 already exists.
+2025-03-06T11:29:57.244Z warn: Skipping insert: Duplicate transaction error detected for BANK_TRANS_REF: 6573245676
+2025-03-06T11:29:57.244Z info: Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: Y5XSY183,
+                    ErrorDescCode: CUSER
+2025-03-06T11:29:57.262Z info: Checking for duplicate transaction in Transactions_TMP with BANK_TRANS_REF: 7202036654
+2025-03-06T11:29:57.280Z warn: Duplicate transaction detected in Transactions_TMP: BANK_TRANS_REF 7202036654 already exists.
+2025-03-06T11:29:57.281Z warn: Skipping insert: Duplicate transaction detected in Transactions_TMP for BANK_TRANS_REF: 7202036654
+2025-03-06T11:29:57.282Z info: Inserted transaction into Transactions_TMP for 7MP7IKRX
+2025-03-06T11:29:57.282Z info: Holiday check for 2025-03-05: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:29:57.283Z info: No system holiday on 2025-03-05
+2025-03-06T11:29:57.302Z error: Error Transaction Detected: Customer number does not exist. Details:
+                    TransCode: 8T1KFC77,
+                    BankCode: HSB,
+                    BranchCode: 7092001,
+                    CustAcc: 610005,
+                    C_OR_D: C,
+                    BankTransRef: 7556436654,
+                    BankDate: 2025-03-06,
+                    Amount: 3516564.55
+2025-03-06T11:29:57.302Z info: Checking for duplicate transaction error with BANK_TRANS_REF: 7556436654
+2025-03-06T11:29:57.321Z warn: Duplicate transaction error detected: BANK_TRANS_REF 7556436654 already exists.
+2025-03-06T11:29:57.321Z warn: Skipping insert: Duplicate transaction error detected for BANK_TRANS_REF: 7556436654
+2025-03-06T11:29:57.322Z info: Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: 8T1KFC77,
+                    ErrorDescCode: CUSER
+2025-03-06T11:29:57.324Z info: Transactions for 2025-03-06: 6 transactions
+2025-03-06T11:30:54.544Z info: Checking transactions for 2025-03-06
+2025-03-06T11:30:54.547Z info: Fetching transactions for date: 2025-03-06
+2025-03-06T11:30:57.014Z info: Fetched transactions for 2025-03-06: undefined transactions
+2025-03-06T11:30:57.014Z info: Holiday check for 2025-03-06: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:30:57.014Z info: No system holiday on 2025-03-06
+2025-03-06T11:30:57.087Z info: Checking for duplicate transaction in Transactions_TMP with BANK_TRANS_REF: 4333261345
+2025-03-06T11:30:57.106Z warn: Duplicate transaction detected in Transactions_TMP: BANK_TRANS_REF 4333261345 already exists.
+2025-03-06T11:30:57.106Z warn: Skipping insert: Duplicate transaction detected in Transactions_TMP for BANK_TRANS_REF: 4333261345
+2025-03-06T11:30:57.107Z info: Inserted transaction into Transactions_TMP for 6R2E7LPJ
+2025-03-06T11:30:57.107Z info: Holiday check for 2025-03-05: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:30:57.107Z info: No system holiday on 2025-03-05
+2025-03-06T11:30:57.124Z info: Checking for duplicate transaction in Transactions_TMP with BANK_TRANS_REF: 4354321345
+2025-03-06T11:30:57.143Z warn: Duplicate transaction detected in Transactions_TMP: BANK_TRANS_REF 4354321345 already exists.
+2025-03-06T11:30:57.143Z warn: Skipping insert: Duplicate transaction detected in Transactions_TMP for BANK_TRANS_REF: 4354321345
+2025-03-06T11:30:57.143Z info: Inserted transaction into Transactions_TMP for A9LS5XVD
+2025-03-06T11:30:57.144Z info: Holiday check for 2025-03-05: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:30:57.144Z info: No system holiday on 2025-03-05
+2025-03-06T11:30:57.145Z error: Error Transaction Detected: Account number length is invalid. Details:
+                TransCode: 5Q98TTIS,
+                BankCode: HSB,
+                BranchCode: 7092001,
+                CustAcc: 61000001410,  // Full account number (either less than or greater than 10 digits)
+                C_OR_D: C,
+                BankTransRef: 6222345676,
+                BankDate: 2025-03-06,
+                Amount: 2416544.39
+2025-03-06T11:30:57.145Z info: Checking for duplicate transaction error with BANK_TRANS_REF: 6222345676
+2025-03-06T11:30:57.165Z warn: Duplicate transaction error detected: BANK_TRANS_REF 6222345676 already exists.
+2025-03-06T11:30:57.166Z warn: Skipping insert: Duplicate transaction error detected for BANK_TRANS_REF: 6222345676
+2025-03-06T11:30:57.167Z info: Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: 5Q98TTIS,
+                    ErrorDescCode: CUSLN
+2025-03-06T11:30:57.186Z error: Error Transaction Detected: Customer number does not exist. Details:
+                    TransCode: LX7Z1S1W,
+                    BankCode: HSB,
+                    BranchCode: 7092001,
+                    CustAcc: 610006,
+                    C_OR_D: C,
+                    BankTransRef: 6573245676,
+                    BankDate: 2025-03-06,
+                    Amount: 3416544.49
+2025-03-06T11:30:57.187Z info: Checking for duplicate transaction error with BANK_TRANS_REF: 6573245676
+2025-03-06T11:30:57.206Z warn: Duplicate transaction error detected: BANK_TRANS_REF 6573245676 already exists.
+2025-03-06T11:30:57.206Z warn: Skipping insert: Duplicate transaction error detected for BANK_TRANS_REF: 6573245676
+2025-03-06T11:30:57.207Z info: Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: LX7Z1S1W,
+                    ErrorDescCode: CUSER
+2025-03-06T11:30:57.225Z info: Checking for duplicate transaction in Transactions_TMP with BANK_TRANS_REF: 7202036654
+2025-03-06T11:30:57.245Z warn: Duplicate transaction detected in Transactions_TMP: BANK_TRANS_REF 7202036654 already exists.
+2025-03-06T11:30:57.246Z warn: Skipping insert: Duplicate transaction detected in Transactions_TMP for BANK_TRANS_REF: 7202036654
+2025-03-06T11:30:57.246Z info: Inserted transaction into Transactions_TMP for TN1BBW7Q
+2025-03-06T11:30:57.248Z info: Holiday check for 2025-03-05: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:30:57.249Z info: No system holiday on 2025-03-05
+2025-03-06T11:30:57.269Z error: Error Transaction Detected: Customer number does not exist. Details:
+                    TransCode: W518PDQ3,
+                    BankCode: HSB,
+                    BranchCode: 7092001,
+                    CustAcc: 610005,
+                    C_OR_D: C,
+                    BankTransRef: 7556436654,
+                    BankDate: 2025-03-06,
+                    Amount: 3516564.55
+2025-03-06T11:30:57.270Z info: Checking for duplicate transaction error with BANK_TRANS_REF: 7556436654
+2025-03-06T11:30:57.291Z warn: Duplicate transaction error detected: BANK_TRANS_REF 7556436654 already exists.
+2025-03-06T11:30:57.291Z warn: Skipping insert: Duplicate transaction error detected for BANK_TRANS_REF: 7556436654
+2025-03-06T11:30:57.293Z info: Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: W518PDQ3,
+                    ErrorDescCode: CUSER
+2025-03-06T11:30:57.297Z info: Transactions for 2025-03-06: 6 transactions
+2025-03-06T11:31:54.552Z info: Checking transactions for 2025-03-06
+2025-03-06T11:31:54.555Z info: Fetching transactions for date: 2025-03-06
+2025-03-06T11:31:57.126Z info: Fetched transactions for 2025-03-06: undefined transactions
+2025-03-06T11:31:57.127Z info: Holiday check for 2025-03-06: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:31:57.127Z info: No system holiday on 2025-03-06
+2025-03-06T11:31:57.195Z info: Checking for duplicate transaction in Transactions_TMP with BANK_TRANS_REF: 4333261345
+2025-03-06T11:31:57.213Z warn: Duplicate transaction detected in Transactions_TMP: BANK_TRANS_REF 4333261345 already exists.
+2025-03-06T11:31:57.213Z warn: Skipping insert: Duplicate transaction detected in Transactions_TMP for BANK_TRANS_REF: 4333261345
+2025-03-06T11:31:57.213Z info: Inserted transaction into Transactions_TMP for Z1XB2FGC
+2025-03-06T11:31:57.214Z info: Holiday check for 2025-03-05: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:31:57.214Z info: No system holiday on 2025-03-05
+2025-03-06T11:31:57.232Z info: Checking for duplicate transaction in Transactions_TMP with BANK_TRANS_REF: 4354321345
+2025-03-06T11:31:57.251Z warn: Duplicate transaction detected in Transactions_TMP: BANK_TRANS_REF 4354321345 already exists.
+2025-03-06T11:31:57.251Z warn: Skipping insert: Duplicate transaction detected in Transactions_TMP for BANK_TRANS_REF: 4354321345
+2025-03-06T11:31:57.251Z info: Inserted transaction into Transactions_TMP for EW6MWZLZ
+2025-03-06T11:31:57.252Z info: Holiday check for 2025-03-05: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:31:57.252Z info: No system holiday on 2025-03-05
+2025-03-06T11:31:57.252Z error: Error Transaction Detected: Account number length is invalid. Details:
+                TransCode: LVSAHXEG,
+                BankCode: HSB,
+                BranchCode: 7092001,
+                CustAcc: 61000001410,  // Full account number (either less than or greater than 10 digits)
+                C_OR_D: C,
+                BankTransRef: 6222345676,
+                BankDate: 2025-03-06,
+                Amount: 2416544.39
+2025-03-06T11:31:57.253Z info: Checking for duplicate transaction error with BANK_TRANS_REF: 6222345676
+2025-03-06T11:31:57.271Z warn: Duplicate transaction error detected: BANK_TRANS_REF 6222345676 already exists.
+2025-03-06T11:31:57.271Z warn: Skipping insert: Duplicate transaction error detected for BANK_TRANS_REF: 6222345676
+2025-03-06T11:31:57.271Z info: Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: LVSAHXEG,
+                    ErrorDescCode: CUSLN
+2025-03-06T11:31:57.290Z error: Error Transaction Detected: Customer number does not exist. Details:
+                    TransCode: 2FBFFYDX,
+                    BankCode: HSB,
+                    BranchCode: 7092001,
+                    CustAcc: 610006,
+                    C_OR_D: C,
+                    BankTransRef: 6573245676,
+                    BankDate: 2025-03-06,
+                    Amount: 3416544.49
+2025-03-06T11:31:57.290Z info: Checking for duplicate transaction error with BANK_TRANS_REF: 6573245676
+2025-03-06T11:31:57.308Z warn: Duplicate transaction error detected: BANK_TRANS_REF 6573245676 already exists.
+2025-03-06T11:31:57.309Z warn: Skipping insert: Duplicate transaction error detected for BANK_TRANS_REF: 6573245676
+2025-03-06T11:31:57.310Z info: Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: 2FBFFYDX,
+                    ErrorDescCode: CUSER
+2025-03-06T11:31:57.327Z info: Checking for duplicate transaction in Transactions_TMP with BANK_TRANS_REF: 7202036654
+2025-03-06T11:31:57.344Z warn: Duplicate transaction detected in Transactions_TMP: BANK_TRANS_REF 7202036654 already exists.
+2025-03-06T11:31:57.345Z warn: Skipping insert: Duplicate transaction detected in Transactions_TMP for BANK_TRANS_REF: 7202036654
+2025-03-06T11:31:57.345Z info: Inserted transaction into Transactions_TMP for F6WATBR9
+2025-03-06T11:31:57.345Z info: Holiday check for 2025-03-05: Sri Lanka holiday = false, Maldives holiday = false
+2025-03-06T11:31:57.346Z info: No system holiday on 2025-03-05
+2025-03-06T11:31:57.362Z error: Error Transaction Detected: Customer number does not exist. Details:
+                    TransCode: DKPJYFLO,
+                    BankCode: HSB,
+                    BranchCode: 7092001,
+                    CustAcc: 610005,
+                    C_OR_D: C,
+                    BankTransRef: 7556436654,
+                    BankDate: 2025-03-06,
+                    Amount: 3516564.55
+2025-03-06T11:31:57.362Z info: Checking for duplicate transaction error with BANK_TRANS_REF: 7556436654
+2025-03-06T11:31:57.380Z warn: Duplicate transaction error detected: BANK_TRANS_REF 7556436654 already exists.
+2025-03-06T11:31:57.380Z warn: Skipping insert: Duplicate transaction error detected for BANK_TRANS_REF: 7556436654
+2025-03-06T11:31:57.381Z info: Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
+                    TransCode: DKPJYFLO,
+                    ErrorDescCode: CUSER
+2025-03-06T11:31:57.383Z info: Transactions for 2025-03-06: 6 transactions
