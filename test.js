@@ -29,29 +29,32 @@ const dbConfig = {
     },
 };
 
-// Set up Winston for logging with daily rotation
+// Function to get Sri Lanka Time (GMT+5:30)
+const getSriLankaTime = () => {
+    return moment().tz('Asia/Colombo').format('YYYY-MM-DD HH:mm:ss');
+};
+
+// ✅ **Winston Logger Setup with Daily Rotation**
 const logTransport = new DailyRotateFile({
-    filename: 'logs/app-%DATE%.log',  // Creates logs in a 'logs' directory with the current date as part of the filename
-    datePattern: 'YYYY-MM-DD',        // Date format for the log filename
-    zippedArchive: true,              // Compress archived logs
-    maxSize: '20m',                   // Maximum size for each log file before rotation (20MB)
-    maxFiles: '14d',                  // Retain log files for the past 14 days
+    filename: 'logs/app-%DATE%.log',  // Daily log files
+    datePattern: 'YYYY-MM-DD',        // Log filename format
+    zippedArchive: true,              // Compress old logs
+    maxSize: '20m',                   // Max log file size before rotation
+    maxFiles: '14d',                  // Keep logs for 14 days
 });
 
 const logger = winston.createLogger({
     level: 'info',
     transports: [
-        logTransport,                    // Logs to daily rotated files
-        new winston.transports.Console({ format: winston.format.simple() })  // Optional: log to console
+        logTransport,
+        new winston.transports.Console({ format: winston.format.simple() }) // Console logging
     ],
     format: winston.format.combine(
-        winston.format.timestamp(),      // Add timestamp to each log entry
-        winston.format.printf(({ timestamp, level, message }) => {
-            return `${timestamp} ${level}: ${message}`;
+        winston.format.printf(({ level, message }) => {
+            return `${getSriLankaTime()} [${level.toUpperCase()}]: ${message}`;
         })
     ),
 });
-
 
 let lastCheckedDate = null;  // Keep track of the last checked date to trigger holiday checks only once a day
 
@@ -99,7 +102,6 @@ function isHoliday(date, countryCode) {
     return cachedHolidays[countryCode].includes(dateString);
 }
 
-// Store transactions depending on system holiday status
 async function storeTransactions(transactionData) {
     if (!Array.isArray(transactionData) || transactionData.length === 0) {
         console.error("No transactions to process.");
@@ -107,82 +109,63 @@ async function storeTransactions(transactionData) {
     }
 
     for (const transaction of transactionData) {
-        const transactionDataItems = transaction.items;  // Transaction details are in 'items'
+        const transactionDataItems = transaction.items;
 
         const transCode = generateTransCode();
         const collectionAcc = 'HSB';
         const bankCode = 'HSB';
         const branchCode = '7092001';
-        //const custAcc = transactionDataItems.transactionInformation.split('/')[2].slice(0, 6);  // Extract first 6 digits
-        const payCca = 'R001';
         const cOrD = transactionDataItems.creditDebitIndicator;
         const bankTransRef = transactionDataItems.transactionReference;
         const bankDate = transactionDataItems.valueDateTime;
         const amount = transactionDataItems.transactionAmount.amount;
         const dipstrName = null;
 
-        // Extract account number from transactionInformation
         const transactionInformation = transactionDataItems.transactionInformation;
-        const custAccMatch = transactionInformation.match(/\/VA\/(\d{10,})\//); // Match account numbers with 10 or more digits
+        const custAccMatch = transactionInformation.match(/\/VA\/(\d{10,})\//);
 
-        let custAcc, errorDescCode;
+        let custAcc, payCca, errorDescCode;
 
         if (custAccMatch && custAccMatch[1]) {
-            const fullAccountNumber = custAccMatch[1]; // Full account number (could be more than 10 digits)
-            
-            // Step 1: Check if the account number is less than or greater than 10 digits
+            const fullAccountNumber = custAccMatch[1];
+
             if (fullAccountNumber.length !== 10) {
                 errorDescCode = 'CUSLN';
-
-                // Log the error when account number is not exactly 10 digits
                 logger.error(`Error Transaction Detected: Account number length is invalid. Details:
                 TransCode: ${transCode},
                 BankCode: ${bankCode},
                 BranchCode: ${branchCode},
-                CustAcc: ${fullAccountNumber},  // Full account number (either less than or greater than 10 digits)
+                CustAcc: ${fullAccountNumber},
                 C_OR_D: ${cOrD},
                 BankTransRef: ${bankTransRef},
                 BankDate: ${bankDate},
                 Amount: ${amount}`);
 
                 try {
-                    // Insert the transaction error into the database
                     await insertTransactionError({
                         transCode,
                         errorDescCode,
                         bankCode,
                         branchCode,
-                        custAcc: fullAccountNumber,  // Full account number
+                        custAcc: fullAccountNumber,
                         cOrD,
                         bankTransRef,
                         bankDate,
                         amount,
                     });
-
-                    // Log success after the transaction has been inserted
-                    logger.info(`Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
-                    TransCode: ${transCode},
-                    ErrorDescCode: ${errorDescCode}`);
+                    logger.info(`Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP: TransCode: ${transCode}, ErrorDescCode: ${errorDescCode}`);
                 } catch (error) {
-                    // Log any issues that occur during the database insertion
-                    logger.error(`Failed to Insert Error Transaction into TRANSACTION_ERROR_TMP:
-                    TransCode: ${transCode},
-                    ErrorDescCode: ${errorDescCode},
-                    Error: ${error.message}`);
+                    logger.error(`Failed to Insert Error Transaction into TRANSACTION_ERROR_TMP: TransCode: ${transCode}, Error: ${error.message}`);
                 }
                 continue;
             }
 
-            // Step 2: If account number is exactly 10 digits, check if customer exists using first 6 digits
-            custAcc = fullAccountNumber.slice(0, 6);  // First 6 digits
-
+            custAcc = fullAccountNumber.slice(0, 6);
             const customerExists = await checkCustomerNumberExists(custAcc);
 
             if (!customerExists) {
                 errorDescCode = 'CUSER';
-
                 try {
-                    // Log the error details before inserting into the database
                     logger.error(`Error Transaction Detected: Customer number does not exist. Details:
                     TransCode: ${transCode},
                     BankCode: ${bankCode},
@@ -193,7 +176,6 @@ async function storeTransactions(transactionData) {
                     BankDate: ${bankDate},
                     Amount: ${amount}`);
 
-                    // Insert the transaction error into the database
                     await insertTransactionError({
                         transCode,
                         errorDescCode,
@@ -205,24 +187,30 @@ async function storeTransactions(transactionData) {
                         bankDate,
                         amount,
                     });
-
-                    // Log success after the transaction has been inserted
-                    logger.info(`Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP:
-                    TransCode: ${transCode},
-                    ErrorDescCode: ${errorDescCode}`);
+                    logger.info(`Error Transaction Successfully Inserted into TRANSACTION_ERROR_TMP: TransCode: ${transCode}, ErrorDescCode: ${errorDescCode}`);
                 } catch (error) {
-                    // Log any issues that occur during the database insertion
-                    logger.error(`Failed to Insert Error Transaction into TRANSACTION_ERROR_TMP:
-                    TransCode: ${transCode},
-                    ErrorDescCode: ${errorDescCode},
-                    Error: ${error.message}`);
+                    logger.error(`Failed to Insert Error Transaction into TRANSACTION_ERROR_TMP: TransCode: ${transCode}, Error: ${error.message}`);
                 }
                 continue;
             }
 
-            // **Insert the transaction into the Transactions_TMP table if the account number is valid**
+            const accountTypeCode = fullAccountNumber.slice(6, 8);
+            switch (accountTypeCode) {
+                case '01':
+                    payCca = 'R001';
+                    break;
+                case '03':
+                    payCca = 'R003';
+                    break;
+                case '08':
+                    payCca = 'R008';
+                    break;
+                default:
+                    payCca = 'UNKNOWN';
+                    break;
+            }
+
             try {
-                // Insert the transaction into Transactions_TMP
                 await insertTransaction({
                     transCode,
                     collectionAcc,
@@ -236,26 +224,17 @@ async function storeTransactions(transactionData) {
                     amount,
                     dipstrName,
                 });
-
-                // Log success after the transaction has been inserted into Transactions_TMP
                 logger.info(`Inserted transaction into Transactions_TMP for ${transCode}`);
             } catch (error) {
                 logger.error(`Failed to Insert Transaction into Transactions_TMP for ${transCode}:`, error);
             }
         }
 
-   
-
-        
-
-        // Check if it's a system holiday in either LK or MV
         const systemHoliday = await isSystemHoliday(bankDate);
 
         if (systemHoliday) {
-            // If it's a system holiday, get the next system working date
             const nextSystemWorkingDate = await getNextSystemWorkingDate(moment(bankDate));
 
-            // Insert into Transactions_TMP table
             await insertTransaction({
                 transCode,
                 collectionAcc,
@@ -270,8 +249,7 @@ async function storeTransactions(transactionData) {
                 dipstrName
             });
             logger.info(`Inserted transaction into Transactions_TMP for ${transCode}`);
-            
-            // Insert into Transactions_NonBusinessDates table with the next system working date
+
             await insertTransactionNonBusinessDate({
                 transCode,
                 collectionAcc,
@@ -288,7 +266,7 @@ async function storeTransactions(transactionData) {
                 reasonForNonBusinessDate: 'System Holiday'
             });
             logger.info(`Inserted transaction into Transactions_NonBusinessDates for ${transCode}`);
-        } 
+        }
     }
 }
 
