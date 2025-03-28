@@ -480,14 +480,14 @@ async function decryptWithPython(encryptedData) {
 
 // Fetch transactions from HSBC with signing and encryption
 async function fetchTransactions(transactionDate) {
-    const clientPrivateKey = await loadPGPKey('client-private.asc');
-    const hsbcPublicKey = await loadPGPKey('hsbc-public.asc');
-    const passphrase = '1password';
+    const clientPrivateKey = await loadPGPKey('rmparks-private-key.asc');
+    const hsbcPublicKey = await loadPGPKey('hsbc-public-key.asc');
+    const passphrase = 'Petrol@2025!Pipeline$Safety';
 
     const requestData = JSON.stringify({
         transactionDate,
-        accountNumber: "339200000005",
-        accountCountry: "GB",
+        accountNumber: "012276648040",
+        accountCountry: "LK",
     });
 
     const encryptedRequestData = await signAndEncryptData(requestData, clientPrivateKey, hsbcPublicKey, passphrase);
@@ -498,7 +498,6 @@ async function fetchTransactions(transactionDate) {
         {
             headers: {
                 'Content-Type': 'application/json',
-                'x-hsbc-client-id': process.env.CLIENT_ID,
                 'x-hsbc-client-secret': process.env.CLIENT_SECRET,
                 'x-hsbc-profile-id': process.env.PROFILE_ID,
                 'x-report-type': 'JSON',
@@ -691,8 +690,9 @@ app.get('/transactions', async (req, res) => {
                 CUST_AC AS transactionInformation,
                 AMOUNT AS amount,
                 C_OR_D AS creditDebitIndicator,
-                BANK_DATE AS valueDateTime
-            FROM Transactions_TMP
+                ENTERED_DATE AS valueDateTime
+            FROM TBL_TRANSACTION
+            WHERE BANK_CODE = 'HSB'
         `);
 
         // Respond with the fetched data
@@ -722,6 +722,7 @@ app.get('/holiday-transactions', async (req, res) => {
                 BANK_DATE AS valueDateTime,
                 NEXT_SYSTEM_WORKING_DATE As nextSystemWorkingDate
             FROM Transactions_NonBusinessDates
+            WHERE BANK_CODE = 'HSB'
         `);
 
         // Respond with the fetched data
@@ -730,6 +731,35 @@ app.get('/holiday-transactions', async (req, res) => {
     } catch (error) {
         console.error('Error fetching non-business date transactions for the frontend:', error);
         res.status(500).json({ error: 'Failed to fetch non-business date transactions from the database.' });
+    }
+});
+
+
+// Fetch transaction information from the TBL_TRANSACTION_ERROR table
+app.get('/error-transactions', async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig); // Connect to the database using `dbConfig`
+
+        // Query to fetch transactions from the TBL_TRANSACTION_ERROR table
+        const result = await pool.request().query(`
+            SELECT 
+                SYS_REF AS id,
+                ERROR_DES_CODE AS errorDesCode,
+                BANK_TRANS_REF AS transactionReference,
+                CUST_AC AS transactionInformation,
+                AMOUNT AS amount,
+                C_OR_D AS creditDebitIndicator,
+                ENTERED_DATE AS valueDateTime
+            FROM TBL_TRANSACTION_ERROR
+            WHERE BANK_CODE = 'HSB'
+        `);
+
+        // Respond with the fetched data
+        res.json({ transactions: result.recordset });
+        await pool.close(); // Close the database connection
+    } catch (error) {
+        console.error('Error fetching error transactions for the frontend:', error);
+        res.status(500).json({ error: 'Failed to fetch error transactions from the database.' });
     }
 });
 
